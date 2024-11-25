@@ -8,6 +8,7 @@ import (
 )
 
 const (
+	EOR  byte = 239
 	SE   byte = 240
 	NOP  byte = 241
 	GA   byte = 249
@@ -20,6 +21,7 @@ const (
 )
 
 var commandCodes = map[byte]string{
+	EOR:  "EOR",
 	SE:   "SE",
 	NOP:  "NOP",
 	GA:   "GA",
@@ -48,7 +50,7 @@ func (c Command) String() string {
 
 	sb.WriteString(opCode)
 
-	if c.OpCode == GA || c.OpCode == NOP {
+	if c.OpCode == GA || c.OpCode == NOP || c.OpCode == EOR {
 		return sb.String()
 	}
 
@@ -118,7 +120,7 @@ func parseCommand(data []byte) (Command, error) {
 		return Command{}, fmt.Errorf("command did not have valid opcode: %q", commandStream(data))
 	}
 
-	if data[1] == NOP || data[1] == GA {
+	if data[1] == NOP || data[1] == GA || data[1] == EOR {
 		return Command{
 			OpCode: data[1],
 		}, nil

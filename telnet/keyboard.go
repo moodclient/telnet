@@ -13,28 +13,25 @@ type keyboardTransport struct {
 	command Command
 }
 
-type lockTransprot struct {
-	lockName   string
-	expiration time.Time
-}
-
 type TelnetKeyboard struct {
-	charset      *Charset
-	outputStream io.Writer
-	input        chan keyboardTransport
-	complete     chan bool
-	eventPump    *terminalEventPump
-	lock         *keyboardLock
+	charset        *Charset
+	outputStream   io.Writer
+	input          chan keyboardTransport
+	complete       chan bool
+	eventPump      *terminalEventPump
+	lock           *keyboardLock
+	promptCommands PromptCommands
 }
 
-func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEventPump) (*TelnetKeyboard, error) {
+func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEventPump, config *TerminalConfig) (*TelnetKeyboard, error) {
 	keyboard := &TelnetKeyboard{
-		charset:      charset,
-		outputStream: output,
-		input:        make(chan keyboardTransport, 10),
-		complete:     make(chan bool, 1),
-		eventPump:    eventPump,
-		lock:         newKeyboardLock(),
+		charset:        charset,
+		outputStream:   output,
+		input:          make(chan keyboardTransport, 10),
+		complete:       make(chan bool, 1),
+		eventPump:      eventPump,
+		lock:           newKeyboardLock(),
+		promptCommands: PromptCommandGA,
 	}
 
 	return keyboard, nil
@@ -69,10 +66,17 @@ func (k *TelnetKeyboard) writeOutput(b []byte) error {
 }
 
 func (k *TelnetKeyboard) writeCommand(c Command) error {
+	// Don't send prompt commands that are being suppressed
+	if c.OpCode == GA && k.promptCommands&PromptCommandGA == 0 {
+		return nil
+	} else if c.OpCode == EOR && k.promptCommands&PromptCommandEOR == 0 {
+		return nil
+	}
+
 	k.eventPump.SentCommand(c)
 
 	size := 2
-	if c.OpCode != GA && c.OpCode != NOP {
+	if c.OpCode != GA && c.OpCode != NOP && c.OpCode != EOR {
 		size++
 	}
 
@@ -195,4 +199,12 @@ func (k *TelnetKeyboard) WriteString(str string) error {
 func (k *TelnetKeyboard) WaitForExit() {
 	<-k.complete
 	k.complete <- true
+}
+
+func (k *TelnetKeyboard) SetPromptCommand(flag PromptCommands) {
+	k.promptCommands |= flag
+}
+
+func (k *TelnetKeyboard) ClearPromptCommand(flag PromptCommands) {
+	k.promptCommands &= ^flag
 }

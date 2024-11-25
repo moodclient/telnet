@@ -11,27 +11,29 @@ import (
 )
 
 type TelnetPrinter struct {
-	scanner      *bufio.Scanner
-	err          error
-	readyBytes   bytes.Buffer
-	command      Command
-	awaitingScan bool
-	scanResult   chan bool
-	complete     chan error
-	eventPump    *terminalEventPump
-	charset      *Charset
+	scanner        *bufio.Scanner
+	err            error
+	readyBytes     bytes.Buffer
+	command        Command
+	awaitingScan   bool
+	scanResult     chan bool
+	complete       chan error
+	eventPump      *terminalEventPump
+	charset        *Charset
+	promptCommands PromptCommands
 }
 
-func newTelnetPrinter(charset *Charset, inputStream io.Reader, eventPump *terminalEventPump) *TelnetPrinter {
+func newTelnetPrinter(charset *Charset, inputStream io.Reader, eventPump *terminalEventPump, config *TerminalConfig) *TelnetPrinter {
 	scan := bufio.NewScanner(inputStream)
 	scan.Split(ScanTelnet)
 
 	printer := &TelnetPrinter{
-		charset:    charset,
-		scanner:    scan,
-		scanResult: make(chan bool),
-		complete:   make(chan error, 1),
-		eventPump:  eventPump,
+		charset:        charset,
+		scanner:        scan,
+		scanResult:     make(chan bool),
+		complete:       make(chan error, 1),
+		eventPump:      eventPump,
+		promptCommands: PromptCommandGA,
 	}
 
 	return printer
@@ -80,10 +82,16 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context) {
 			continue
 		}
 
-		if p.command.OpCode == GA {
+		if (p.command.OpCode == GA && p.promptCommands&PromptCommandGA != 0) ||
+			(p.command.OpCode == EOR && p.promptCommands&PromptCommandEOR != 0) {
 			p.eventPump.EncounteredPrompt(p.decode(printBytes), awaitingMore > 0)
 			p.readyBytes.Reset()
 			awaitingMore = 0
+			continue
+		}
+
+		if p.command.OpCode == GA || p.command.OpCode == EOR {
+			// We received a suppressed prompt code
 			continue
 		}
 
@@ -206,6 +214,14 @@ func (p *TelnetPrinter) decode(textBytes []byte) string {
 	return text
 }
 
+func (p *TelnetPrinter) SetPromptCommand(flag PromptCommands) {
+	p.promptCommands |= flag
+}
+
+func (p *TelnetPrinter) ClearPromptCommand(flag PromptCommands) {
+	p.promptCommands &= ^flag
+}
+
 func findNextSpecialChar(data []byte, onlyIAC bool) (int, byte) {
 	for i := 0; i < len(data); i++ {
 		if onlyIAC && data[i] != IAC {
@@ -244,9 +260,9 @@ func scanTelnetWithoutEOF(data []byte) (advance int, token []byte, err error) {
 		return 0, nil, nil
 	}
 
-	// IAC GA and IAC NOP release on their own
+	// IAC GA, IAC EOR, and IAC NOP release on their own
 	// SE should never appear here but if it does we should recover by consuming the data
-	if data[1] == GA || data[1] == NOP || data[1] == SE {
+	if data[1] == GA || data[1] == NOP || data[1] == SE || data[1] == EOR {
 		return 2, data[:2], nil
 	}
 

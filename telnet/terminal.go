@@ -14,6 +14,13 @@ const (
 	SideServer
 )
 
+type PromptCommands byte
+
+const (
+	PromptCommandGA PromptCommands = 1 << iota
+	PromptCommandEOR
+)
+
 type Terminal struct {
 	conn        net.Conn
 	side        TerminalSide
@@ -21,6 +28,7 @@ type Terminal struct {
 	keyboard    *TelnetKeyboard
 	printer     *TelnetPrinter
 	telOptStack *telOptStack
+	config      *TerminalConfig
 }
 
 func NewTerminal(ctx context.Context, conn net.Conn, side TerminalSide, library *TelOptLibrary, preferences TelOptPreferences) (*Terminal, error) {
@@ -30,13 +38,16 @@ func NewTerminal(ctx context.Context, conn net.Conn, side TerminalSide, library 
 	}
 
 	pump := newEventPump()
+	config := &TerminalConfig{
+		promptCommands: PromptCommandGA,
+	}
 
-	keyboard, err := newTelnetKeyboard(charset, conn, pump)
+	keyboard, err := newTelnetKeyboard(charset, conn, pump, config)
 	if err != nil {
 		return nil, err
 	}
 
-	printer := newTelnetPrinter(charset, conn, pump)
+	printer := newTelnetPrinter(charset, conn, pump, config)
 
 	telopt := newTelOptStack(library, preferences)
 
@@ -47,6 +58,7 @@ func NewTerminal(ctx context.Context, conn net.Conn, side TerminalSide, library 
 		keyboard:    keyboard,
 		printer:     printer,
 		telOptStack: telopt,
+		config:      &TerminalConfig{},
 	}
 
 	err = telopt.WriteRequests(terminal)
@@ -94,6 +106,14 @@ func (t *Terminal) Charset() *Charset {
 
 func (t *Terminal) Keyboard() *TelnetKeyboard {
 	return t.keyboard
+}
+
+func (t *Terminal) Printer() *TelnetPrinter {
+	return t.printer
+}
+
+func (t *Terminal) Config() *TerminalConfig {
+	return t.config
 }
 
 func (t *Terminal) encounteredCommand(c Command) {
