@@ -5,13 +5,6 @@ import (
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
-package telopts
-
-import (
-"fmt"
-"github.com/cannibalvox/moodclient/telnet"
-)
-
 const echo telnet.TelOptCode = 1
 
 // ECHO indicates whether the local will repeat text sent from the remote back to the remote.  In practice,
@@ -36,4 +29,3 @@ func (o *ECHO) String() string {
 func (o *ECHO) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("echo: unknown subnegotiation: %+v", subnegotiation)
 }
-
