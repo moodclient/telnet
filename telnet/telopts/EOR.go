@@ -5,7 +5,15 @@ import (
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
-const eor telnet.TelOptCode = 25
+const CodeEOR telnet.TelOptCode = 25
+
+func EORRegistration() telnet.TelOptFactory {
+	return func(terminal *telnet.Terminal) telnet.TelnetOption {
+		return &EOR{
+			NewBaseTelOpt(terminal),
+		}
+	}
+}
 
 type EOR struct {
 	BaseTelOpt
@@ -14,7 +22,7 @@ type EOR struct {
 var _ telnet.TelnetOption = &EOR{}
 
 func (o *EOR) Code() telnet.TelOptCode {
-	return eor
+	return CodeEOR
 }
 
 func (o *EOR) String() string {
@@ -43,4 +51,8 @@ func (o *EOR) TransitionRemoteState(newState telnet.TelOptState) error {
 
 func (o *EOR) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("eor: unknown subnegotiation: %+v", subnegotiation)
+}
+
+func (o *EOR) SubnegotiationString(subnegotiation []byte) (string, error) {
+	return "", fmt.Errorf("eor: unknown subnegotiation: %+v", subnegotiation)
 }

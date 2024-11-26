@@ -23,7 +23,7 @@ type TelnetKeyboard struct {
 	promptCommands PromptCommands
 }
 
-func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEventPump, config *TerminalConfig) (*TelnetKeyboard, error) {
+func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEventPump) (*TelnetKeyboard, error) {
 	keyboard := &TelnetKeyboard{
 		charset:        charset,
 		outputStream:   output,
@@ -129,7 +129,7 @@ func (k *TelnetKeyboard) keyboardLoop(ctx context.Context) {
 		<-ctx.Done()
 		close(k.input)
 	}()
-	queuedText := make([]string, 10)
+	queuedText := make([]string, 0, 10)
 
 keyboardLoop:
 	for {

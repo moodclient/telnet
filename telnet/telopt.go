@@ -3,6 +3,8 @@ package telnet
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 type TelOptCode byte
@@ -11,7 +13,7 @@ type TelOptFactory func(terminal *Terminal) TelnetOption
 var ErrOptionCollision = errors.New("telopt: option collision")
 var ErrOptionUnknown = errors.New("telopt: unknown option")
 
-var telOptLibrary map[TelOptCode]TelOptFactory = make(map[TelOptCode]TelOptFactory)
+var telOptLibrary = make(map[TelOptCode]TelOptFactory)
 
 func RegisterOption[OptionStruct any, T TypedTelnetOption[OptionStruct]](factory TelOptFactory) error {
 	var zero OptionStruct
@@ -110,6 +112,8 @@ type TelnetOption interface {
 	// Subnegotiate is called when a subnegotiation request arrives from the remote party. This will only
 	// be called when the option is active on one side of the connection
 	Subnegotiate(subnegotiation []byte) error
+	// SubnegotiationString creates a legible string for a subnegotiation request
+	SubnegotiationString(subnegotiation []byte) (string, error)
 }
 
 type TelOptPreferences struct {
@@ -146,7 +150,7 @@ type telOptStack struct {
 	awaitedRequests int
 }
 
-func newTelOptStack(library *TelOptCache, preferences TelOptPreferences) *telOptStack {
+func newTelOptStack(cache *TelOptCache, preferences TelOptPreferences) *telOptStack {
 	allowRemote := make(map[TelOptCode]struct{})
 	for _, telOpt := range preferences.AllowRemote {
 		allowRemote[telOpt] = struct{}{}
@@ -164,7 +168,7 @@ func newTelOptStack(library *TelOptCache, preferences TelOptPreferences) *telOpt
 	}
 
 	return &telOptStack{
-		cache: library,
+		cache: cache,
 
 		allowRemoteSet: allowRemote,
 		allowLocalSet:  allowLocal,
@@ -180,7 +184,7 @@ func (s *telOptStack) rejectNegotiationRequest(terminal *Terminal, c Command) {
 	}
 }
 
-func (s *telOptStack) processSubnegotiation(terminal *Terminal, c Command) error {
+func (s *telOptStack) processSubnegotiation(c Command) error {
 	option, err := s.cache.get(c.Option)
 
 	if errors.Is(err, ErrOptionUnknown) {
@@ -251,7 +255,7 @@ func (s *telOptStack) WriteRequests(terminal *Terminal) error {
 
 func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 	if c.OpCode == SB {
-		return s.processSubnegotiation(terminal, c)
+		return s.processSubnegotiation(c)
 	}
 
 	// It's not a negotiation command
@@ -312,4 +316,53 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 	}
 
 	return transitionFunc(TelOptActive)
+}
+
+func (s *telOptStack) CommandString(c Command) string {
+	var sb strings.Builder
+	sb.WriteString("IAC ")
+
+	opCode, hasOpCode := commandCodes[c.OpCode]
+	if !hasOpCode {
+		opCode = strconv.Itoa(int(c.OpCode))
+	}
+
+	sb.WriteString(opCode)
+
+	if c.OpCode == GA || c.OpCode == NOP || c.OpCode == EOR {
+		return sb.String()
+	}
+
+	sb.WriteByte(' ')
+
+	option, optErr := s.cache.get(c.Option)
+
+	if optErr != nil {
+		sb.WriteString("? Unknown Option ")
+		sb.WriteString(strconv.Itoa(int(c.Option)))
+		sb.WriteString("?")
+	} else {
+		sb.WriteString(option.String())
+	}
+
+	if c.OpCode != SB {
+		return sb.String()
+	}
+
+	sb.WriteByte(' ')
+
+	if optErr != nil {
+		sb.WriteString(fmt.Sprintf("%+v", c.Subnegotiation))
+	} else {
+		str, err := option.SubnegotiationString(c.Subnegotiation)
+
+		if err != nil {
+			sb.WriteString(fmt.Sprintf("%+v", c.Subnegotiation))
+		} else {
+			sb.WriteString(str)
+		}
+	}
+
+	sb.WriteString(" IAC SE")
+	return sb.String()
 }

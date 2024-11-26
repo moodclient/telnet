@@ -5,7 +5,15 @@ import (
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
-const echo telnet.TelOptCode = 1
+const CodeECHO telnet.TelOptCode = 1
+
+func ECHORegistration() telnet.TelOptFactory {
+	return func(terminal *telnet.Terminal) telnet.TelnetOption {
+		return &ECHO{
+			NewBaseTelOpt(terminal),
+		}
+	}
+}
 
 // ECHO indicates whether the local will repeat text sent from the remote back to the remote.  In practice,
 // clients will tend to echo locally if the remote is not set to echo, so ECHO is used far more often
@@ -19,7 +27,7 @@ type ECHO struct {
 var _ telnet.TelnetOption = &ECHO{}
 
 func (o *ECHO) Code() telnet.TelOptCode {
-	return echo
+	return CodeECHO
 }
 
 func (o *ECHO) String() string {
@@ -28,4 +36,8 @@ func (o *ECHO) String() string {
 
 func (o *ECHO) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("echo: unknown subnegotiation: %+v", subnegotiation)
+}
+
+func (o *ECHO) SubnegotiationString(subnegotiation []byte) (string, error) {
+	return "", fmt.Errorf("echo: unknown subnegotiation: %+v", subnegotiation)
 }

@@ -1,19 +1,29 @@
 package telopts
 
 import (
-	"encoding/ascii85"
 	"errors"
 	"fmt"
 	"github.com/cannibalvox/moodclient/telnet"
+	"strings"
 )
 
-const ttype telnet.TelOptCode = 24
+const CodeTTYPE telnet.TelOptCode = 24
 const ttypeKeyboardLock string = "lock.ttype"
 
 const (
 	ttypeIS byte = iota
 	ttypeSEND
 )
+
+func TTYPERegistration(localTerminals []string) telnet.TelOptFactory {
+	return func(terminal *telnet.Terminal) telnet.TelnetOption {
+		return &TTYPE{
+			BaseTelOpt: NewBaseTelOpt(terminal),
+
+			localTerminals: localTerminals,
+		}
+	}
+}
 
 type TTYPE struct {
 	BaseTelOpt
@@ -29,7 +39,7 @@ var TTYPEInstance = &TTYPE{}
 var _ telnet.TelnetOption = TTYPEInstance
 
 func (o *TTYPE) Code() telnet.TelOptCode {
-	return ttype
+	return CodeTTYPE
 }
 
 func (o *TTYPE) String() string {
@@ -39,19 +49,19 @@ func (o *TTYPE) String() string {
 func (o *TTYPE) writeRequestSend() {
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
-		Option:         ttype,
+		Option:         CodeTTYPE,
 		Subnegotiation: []byte{ttypeSEND},
 	})
 }
 
 func (o *TTYPE) writeTerminal(terminal string) {
-	terminalBytes := make([]byte, len(terminal)+1)
-	terminalBytes[0] = ttypeIS
-	_ = ascii85.Encode(terminalBytes[1:], []byte(terminal))
+	terminalBytes := make([]byte, 0, len(terminal)+1)
+	terminalBytes = append(terminalBytes, ttypeIS)
+	terminalBytes = append(terminalBytes, []byte(terminal)...)
 
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
-		Option:         ttype,
+		Option:         CodeTTYPE,
 		Subnegotiation: terminalBytes,
 	})
 }
@@ -94,6 +104,25 @@ func (o *TTYPE) TransitionRemoteState(newState telnet.TelOptState) error {
 	return nil
 }
 
+func (o *TTYPE) SubnegotiationString(subnegotiation []byte) (string, error) {
+	if len(subnegotiation) < 1 {
+		return "", errors.New("ttype: received empty subnegotiation")
+	}
+
+	if subnegotiation[0] == ttypeIS {
+		var sb strings.Builder
+		sb.WriteString("IS ")
+		sb.WriteString(string(subnegotiation[1:]))
+		return sb.String(), nil
+	}
+
+	if subnegotiation[0] == ttypeSEND {
+		return "SEND", nil
+	}
+
+	return "", fmt.Errorf("ttype: unknown subnegotiation: %+v", subnegotiation)
+}
+
 func (o *TTYPE) Subnegotiate(subnegotiation []byte) error {
 	if len(subnegotiation) < 1 {
 		return errors.New("ttype: received empty subnegotiation")
@@ -107,13 +136,7 @@ func (o *TTYPE) Subnegotiate(subnegotiation []byte) error {
 
 		var newTerminal string
 		if len(subnegotiation) > 1 {
-			terminalBytes := make([]byte, len(subnegotiation)-1)
-			_, _, err := ascii85.Decode(terminalBytes, subnegotiation[1:], true)
-			if err != nil {
-				return fmt.Errorf("ttype: failed to decode terminal name: %w", err)
-			}
-
-			newTerminal = string(terminalBytes)
+			newTerminal = string(subnegotiation[1:])
 		}
 
 		if len(o.remoteTerminals) == 0 || o.remoteTerminals[len(o.remoteTerminals)-1] != newTerminal {

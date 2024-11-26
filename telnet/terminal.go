@@ -28,40 +28,34 @@ type Terminal struct {
 	keyboard    *TelnetKeyboard
 	printer     *TelnetPrinter
 	telOptStack *telOptStack
-	config      *TerminalConfig
 }
 
-func NewTerminal(ctx context.Context, conn net.Conn, side TerminalSide, library *TelOptLibrary, preferences TelOptPreferences) (*Terminal, error) {
+func NewTerminal(ctx context.Context, conn net.Conn, side TerminalSide, preferences TelOptPreferences) (*Terminal, error) {
 	charset, err := NewCharset("US-ASCII")
 	if err != nil {
 		return nil, err
 	}
 
 	pump := newEventPump()
-	config := &TerminalConfig{
-		promptCommands: PromptCommandGA,
-	}
 
-	keyboard, err := newTelnetKeyboard(charset, conn, pump, config)
+	keyboard, err := newTelnetKeyboard(charset, conn, pump)
 	if err != nil {
 		return nil, err
 	}
 
-	printer := newTelnetPrinter(charset, conn, pump, config)
-
-	telopt := newTelOptStack(library, preferences)
-
+	printer := newTelnetPrinter(charset, conn, pump)
 	terminal := &Terminal{
-		conn:        conn,
-		side:        side,
-		charset:     charset,
-		keyboard:    keyboard,
-		printer:     printer,
-		telOptStack: telopt,
-		config:      &TerminalConfig{},
+		conn:     conn,
+		side:     side,
+		charset:  charset,
+		keyboard: keyboard,
+		printer:  printer,
 	}
 
-	err = telopt.WriteRequests(terminal)
+	cache := newTelOptCache(terminal)
+	terminal.telOptStack = newTelOptStack(cache, preferences)
+
+	err = terminal.telOptStack.WriteRequests(terminal)
 	if err != nil {
 		return nil, err
 	}
@@ -112,12 +106,8 @@ func (t *Terminal) Printer() *TelnetPrinter {
 	return t.printer
 }
 
-func (t *Terminal) Config() *TerminalConfig {
-	return t.config
-}
-
 func (t *Terminal) encounteredCommand(c Command) {
-	fmt.Println("COMMAND:", c)
+	fmt.Println("COMMAND:", t.telOptStack.CommandString(c))
 	err := t.telOptStack.ProcessCommand(t, c)
 	if err != nil {
 		t.encounteredError(err)
@@ -149,7 +139,7 @@ func (t *Terminal) sentText(text string) {
 }
 
 func (t *Terminal) sentCommand(c Command) {
-	fmt.Println("OUTBOUND: ", c)
+	fmt.Println("OUTBOUND: ", t.telOptStack.CommandString(c))
 }
 
 func (t *Terminal) WaitForExit() error {

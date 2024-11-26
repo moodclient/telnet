@@ -39,37 +39,6 @@ type Command struct {
 	Subnegotiation []byte
 }
 
-func (c Command) String() string {
-	var sb strings.Builder
-	sb.WriteString("IAC ")
-
-	opCode, hasOpCode := commandCodes[c.OpCode]
-	if !hasOpCode {
-		opCode = strconv.Itoa(int(c.OpCode))
-	}
-
-	sb.WriteString(opCode)
-
-	if c.OpCode == GA || c.OpCode == NOP || c.OpCode == EOR {
-		return sb.String()
-	}
-
-	sb.WriteByte(' ')
-	sb.WriteString(strconv.Itoa(int(c.Option)))
-
-	if c.OpCode != SB {
-		return sb.String()
-	}
-
-	for _, b := range c.Subnegotiation {
-		sb.WriteByte(' ')
-		sb.WriteString(strconv.Itoa(int(b)))
-	}
-
-	sb.WriteString(" IAC SE")
-	return sb.String()
-}
-
 func (c Command) IsNegotiationRequest() bool {
 	return c.OpCode == DO || c.OpCode == WILL
 }

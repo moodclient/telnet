@@ -5,7 +5,15 @@ import (
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
-const naws telnet.TelOptCode = 31
+const CodeNAWS telnet.TelOptCode = 31
+
+func NAWSRegistration() telnet.TelOptFactory {
+	return func(terminal *telnet.Terminal) telnet.TelnetOption {
+		return &NAWS{
+			BaseTelOpt: NewBaseTelOpt(terminal),
+		}
+	}
+}
 
 type NAWS struct {
 	BaseTelOpt
@@ -19,7 +27,7 @@ type NAWS struct {
 var _ telnet.TelnetOption = &NAWS{}
 
 func (o *NAWS) Code() telnet.TelOptCode {
-	return naws
+	return CodeNAWS
 }
 
 func (o *NAWS) String() string {
@@ -29,7 +37,7 @@ func (o *NAWS) String() string {
 func (o *NAWS) writeSizeSubnegotiation() {
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode: telnet.SB,
-		Option: naws,
+		Option: CodeNAWS,
 		Subnegotiation: []byte{
 			byte(o.localWidth >> 8),
 			byte(o.localWidth & 0xff),
@@ -69,6 +77,10 @@ func (o *NAWS) Subnegotiate(subnegotiation []byte) error {
 	o.remoteHeight = (int(subnegotiation[0]) << 8) | int(subnegotiation[1]) // height
 
 	return nil
+}
+
+func (o *NAWS) SubnegotiationString(subnegotiation []byte) (string, error) {
+	return fmt.Sprintf("%+v", subnegotiation), nil
 }
 
 func (o *NAWS) SetLocalSize(width, height int) {

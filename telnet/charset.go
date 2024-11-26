@@ -38,14 +38,14 @@ func (c Charset) Decode(incomingText []byte) (string, error) {
 	}
 
 	str := string(b)
-	return strings.TrimSuffix(str, "\ufffd"), nil
+	return str, nil // strings.TrimSuffix(str, "\ufffd"), nil
 }
 
 func (c *Charset) SetCharset(codePage string) error {
 	if strings.ToLower(codePage) == "utf-8" {
 		c.current = currentCharset{
 			encoder: encoding.Replacement.NewEncoder(),
-			decoder: encoding.Replacement.NewDecoder(),
+			decoder: encoding.Nop.NewDecoder(),
 			name:    "UTF-8",
 		}
 		return nil

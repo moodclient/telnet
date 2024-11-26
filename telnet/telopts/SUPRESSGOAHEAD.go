@@ -5,7 +5,15 @@ import (
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
-const suppressgoahead telnet.TelOptCode = 3
+const CodeSUPPRESSGOAHEAD telnet.TelOptCode = 3
+
+func SUPPRESSGOAHEADRegistration() telnet.TelOptFactory {
+	return func(terminal *telnet.Terminal) telnet.TelnetOption {
+		return &SUPPRESSGOAHEAD{
+			NewBaseTelOpt(terminal),
+		}
+	}
+}
 
 type SUPPRESSGOAHEAD struct {
 	BaseTelOpt
@@ -14,7 +22,7 @@ type SUPPRESSGOAHEAD struct {
 var _ telnet.TelnetOption = &SUPPRESSGOAHEAD{}
 
 func (o *SUPPRESSGOAHEAD) Code() telnet.TelOptCode {
-	return suppressgoahead
+	return CodeSUPPRESSGOAHEAD
 }
 
 func (o *SUPPRESSGOAHEAD) String() string {
@@ -43,4 +51,8 @@ func (o *SUPPRESSGOAHEAD) TransitionRemoteState(newState telnet.TelOptState) err
 
 func (o *SUPPRESSGOAHEAD) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("suppress-go-ahead: unknown subnegotiation: %+v", subnegotiation)
+}
+
+func (o *SUPPRESSGOAHEAD) SubnegotiationString(subnegotiation []byte) (string, error) {
+	return "", fmt.Errorf("suppress-go-ahead: unknown subnegotiation: %+v", subnegotiation)
 }

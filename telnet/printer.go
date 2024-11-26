@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -23,7 +24,7 @@ type TelnetPrinter struct {
 	promptCommands PromptCommands
 }
 
-func newTelnetPrinter(charset *Charset, inputStream io.Reader, eventPump *terminalEventPump, config *TerminalConfig) *TelnetPrinter {
+func newTelnetPrinter(charset *Charset, inputStream io.Reader, eventPump *terminalEventPump) *TelnetPrinter {
 	scan := bufio.NewScanner(inputStream)
 	scan.Split(ScanTelnet)
 
@@ -69,7 +70,7 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context) {
 			completeLine := printBytes[len(printBytes)-1] == '\n'
 
 			if len(printBytes) > awaitingMore {
-				p.eventPump.EncounteredText(p.decode(printBytes), awaitingMore > 0, completeLine)
+				p.eventPump.EncounteredText(p.decode(printBytes, completeLine), awaitingMore > 0, completeLine)
 			}
 
 			awaitingMore = 0
@@ -84,7 +85,7 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context) {
 
 		if (p.command.OpCode == GA && p.promptCommands&PromptCommandGA != 0) ||
 			(p.command.OpCode == EOR && p.promptCommands&PromptCommandEOR != 0) {
-			p.eventPump.EncounteredPrompt(p.decode(printBytes), awaitingMore > 0)
+			p.eventPump.EncounteredPrompt(p.decode(printBytes, true), awaitingMore > 0)
 			p.readyBytes.Reset()
 			awaitingMore = 0
 			continue
@@ -205,10 +206,14 @@ func (p *TelnetPrinter) WaitForExit() error {
 	return err
 }
 
-func (p *TelnetPrinter) decode(textBytes []byte) string {
+func (p *TelnetPrinter) decode(textBytes []byte, completeLine bool) string {
 	text, err := p.charset.Decode(textBytes)
 	if err != nil {
 		p.eventPump.EncounteredError(err)
+	}
+
+	if !completeLine {
+		text = strings.TrimSuffix(text, "\ufffd")
 	}
 
 	return text

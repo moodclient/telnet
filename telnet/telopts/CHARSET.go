@@ -2,7 +2,6 @@ package telopts
 
 import (
 	"bytes"
-	"encoding/ascii85"
 	"errors"
 	"fmt"
 	"github.com/cannibalvox/moodclient/telnet"
@@ -11,11 +10,15 @@ import (
 )
 
 const (
-	charset telnet.TelOptCode = 42
+	CodeCHARSET telnet.TelOptCode = 42
 
 	charsetREQUEST byte = iota
 	charsetACCEPTED
 	charsetREJECTED
+	charsetTTABLEIS
+	charsetTTABLEREJECTED
+	charsetTTABLEACK
+	charsetTTABLENAK
 )
 
 const charsetKeyboardLock = "lock.charset"
@@ -23,6 +26,21 @@ const charsetKeyboardLock = "lock.charset"
 type CHARSETOptions struct {
 	PreferredCharsets []string
 	AllowAnyCharset   bool
+}
+
+func CHARSETRegistration(options CHARSETOptions) telnet.TelOptFactory {
+	charsets := make(map[string]struct{})
+	for _, c := range options.PreferredCharsets {
+		charsets[c] = struct{}{}
+	}
+
+	return func(terminal *telnet.Terminal) telnet.TelnetOption {
+		return &CHARSET{
+			BaseTelOpt:           NewBaseTelOpt(terminal),
+			options:              options,
+			localAllowedCharsets: charsets,
+		}
+	}
 }
 
 type CHARSET struct {
@@ -49,9 +67,7 @@ func (o *CHARSET) writeRequest(charSets []string) error {
 			return err
 		}
 
-		charsetBytes := make([]byte, len(preferredCharset))
-		ascii85.Encode(charsetBytes, []byte(preferredCharset))
-		_, err = subnegotiation.Write(charsetBytes)
+		_, err = subnegotiation.Write([]byte(preferredCharset))
 		if err != nil {
 			return err
 		}
@@ -59,7 +75,7 @@ func (o *CHARSET) writeRequest(charSets []string) error {
 
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
-		Option:         charset,
+		Option:         CodeCHARSET,
 		Subnegotiation: subnegotiation.Bytes(),
 	})
 
@@ -67,13 +83,13 @@ func (o *CHARSET) writeRequest(charSets []string) error {
 }
 
 func (o *CHARSET) writeAccept(acceptedCharset string) {
-	subnegotiation := make([]byte, len(acceptedCharset)+1)
-	subnegotiation[0] = charsetACCEPTED
-	ascii85.Encode(subnegotiation[1:], []byte(acceptedCharset))
+	subnegotiation := make([]byte, 0, len(acceptedCharset)+1)
+	subnegotiation = append(subnegotiation, charsetACCEPTED)
+	subnegotiation = append(subnegotiation, []byte(acceptedCharset)...)
 
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
-		Option:         charset,
+		Option:         CodeCHARSET,
 		Subnegotiation: subnegotiation,
 	})
 }
@@ -81,7 +97,7 @@ func (o *CHARSET) writeAccept(acceptedCharset string) {
 func (o *CHARSET) writeReject() {
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
-		Option:         charset,
+		Option:         CodeCHARSET,
 		Subnegotiation: []byte{charsetREJECTED},
 	})
 }
@@ -124,7 +140,7 @@ func (o *CHARSET) TransitionLocalState(newState telnet.TelOptState) error {
 }
 
 func (o *CHARSET) Code() telnet.TelOptCode {
-	return charset
+	return CodeCHARSET
 }
 
 func (o *CHARSET) String() string {
@@ -150,11 +166,12 @@ func (o *CHARSET) isAcceptableCharset(charSet string) bool {
 }
 
 func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
-	if o.RemoteState() != telnet.TelOptActive {
-		// Inactive sides shouldn't be sending charset requests
-		o.writeReject()
-		return nil
-	}
+	// Some MUDs don't follow this rule!
+	//if o.RemoteState() != telnet.TelOptActive {
+	//	// Inactive sides shouldn't be sending charset requests
+	//	o.writeReject()
+	//	return nil
+	//}
 
 	o.bestRemoteEncoding = ""
 	charSets := subnegotiation[1:]
@@ -193,6 +210,7 @@ func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
 	// We have no reason not to accept the encoding
 	err := o.Terminal().Charset().SetCharset(o.bestRemoteEncoding)
 	if err != nil {
+		o.writeReject()
 		return err
 	}
 
@@ -227,7 +245,7 @@ func (o *CHARSET) subnegotiateACCEPTED(subnegotiation []byte) error {
 
 	charSet := string(subnegotiation[1:])
 	if !o.isAcceptableCharset(charSet) {
-		return fmt.Errorf("charset: client sent ACCEPT for invalid charset %s", charSet)
+		return fmt.Errorf("CodeCHARSET: client sent ACCEPT for invalid CodeCHARSET %s", charSet)
 	}
 
 	o.bestRemoteEncoding = charSet
@@ -242,7 +260,9 @@ func (o *CHARSET) Subnegotiate(subnegotiation []byte) error {
 	}
 
 	if subnegotiation[0] == charsetREQUEST {
-		return o.subnegotiateREQUEST(subnegotiation)
+		err := o.subnegotiateREQUEST(subnegotiation)
+		o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
+		return err
 	}
 
 	if subnegotiation[0] == charsetREJECTED {
@@ -254,4 +274,43 @@ func (o *CHARSET) Subnegotiate(subnegotiation []byte) error {
 	}
 
 	return fmt.Errorf("charset: unexpected subnegotiation %+v", subnegotiation)
+}
+
+func (o *CHARSET) SubnegotiationString(subnegotiation []byte) (string, error) {
+	if len(subnegotiation) == 0 {
+		return "", fmt.Errorf("charset: empty subnegotiation")
+	}
+
+	if subnegotiation[0] == charsetREQUEST {
+		var sb strings.Builder
+		sb.WriteString("REQUEST ")
+		sb.WriteString(string(subnegotiation[1:]))
+		return sb.String(), nil
+	}
+
+	if subnegotiation[0] == charsetREJECTED {
+		return "REJECTED", nil
+	}
+
+	if subnegotiation[0] == charsetACCEPTED {
+		return "ACCEPTED", nil
+	}
+
+	if subnegotiation[0] == charsetTTABLEIS {
+		return "TTABLE-IS", nil
+	}
+
+	if subnegotiation[0] == charsetTTABLEREJECTED {
+		return "TTABLE-REJECTED", nil
+	}
+
+	if subnegotiation[0] == charsetTTABLEACK {
+		return "TTABLE-ACK", nil
+	}
+
+	if subnegotiation[0] == charsetTTABLENAK {
+		return "TTABLE-NAK", nil
+	}
+
+	return "", fmt.Errorf("charset: unexpected subnegotiation %+v", subnegotiation)
 }
