@@ -2,12 +2,7 @@ package telopts
 
 import (
 	"github.com/cannibalvox/moodclient/telnet"
-	"time"
 )
-
-const LocalBlockTimeout = 5 * time.Second
-const LocalBlockLocalRequest = "block.localRequested"
-const LocalBlockRemoteRequest = "block.remoteRequested"
 
 type BaseTelOpt struct {
 	terminal    *telnet.Terminal
