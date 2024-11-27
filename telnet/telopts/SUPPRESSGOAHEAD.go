@@ -5,6 +5,7 @@ import (
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
+const suppressgoaheadKeyboardLock string = "lock.suppress-go-ahead"
 const CodeSUPPRESSGOAHEAD telnet.TelOptCode = 3
 
 func SUPPRESSGOAHEADRegistration() telnet.TelOptFactory {
@@ -30,6 +31,13 @@ func (o *SUPPRESSGOAHEAD) String() string {
 }
 
 func (o *SUPPRESSGOAHEAD) TransitionLocalState(newState telnet.TelOptState) error {
+	if newState == telnet.TelOptRequested {
+		o.Terminal().Keyboard().SetLock(suppressgoaheadKeyboardLock, telnet.DefaultKeyboardLock)
+		return nil
+	}
+
+	o.Terminal().Keyboard().ClearLock(suppressgoaheadKeyboardLock)
+
 	if newState == telnet.TelOptActive {
 		o.Terminal().Keyboard().ClearPromptCommand(telnet.PromptCommandGA)
 	} else if newState == telnet.TelOptInactive {

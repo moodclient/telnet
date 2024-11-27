@@ -6,14 +6,6 @@ import (
 	"net"
 )
 
-type TerminalSide byte
-
-const (
-	SideUnknown TerminalSide = iota
-	SideClient
-	SideServer
-)
-
 type PromptCommands byte
 
 const (
@@ -30,8 +22,8 @@ type Terminal struct {
 	telOptStack *telOptStack
 }
 
-func NewTerminal(ctx context.Context, conn net.Conn, side TerminalSide, preferences TelOptPreferences) (*Terminal, error) {
-	charset, err := NewCharset("US-ASCII")
+func NewTerminal(ctx context.Context, conn net.Conn, config TerminalOptions) (*Terminal, error) {
+	charset, err := NewCharset(config.DefaultCharsetName, config.CharsetUsage)
 	if err != nil {
 		return nil, err
 	}
@@ -46,14 +38,14 @@ func NewTerminal(ctx context.Context, conn net.Conn, side TerminalSide, preferen
 	printer := newTelnetPrinter(charset, conn, pump)
 	terminal := &Terminal{
 		conn:     conn,
-		side:     side,
+		side:     config.Side,
 		charset:  charset,
 		keyboard: keyboard,
 		printer:  printer,
 	}
 
 	cache := newTelOptCache(terminal)
-	terminal.telOptStack = newTelOptStack(cache, preferences)
+	terminal.telOptStack = newTelOptStack(cache, config.TelOpts)
 
 	err = terminal.telOptStack.WriteRequests(terminal)
 	if err != nil {
@@ -139,7 +131,7 @@ func (t *Terminal) sentText(text string) {
 }
 
 func (t *Terminal) sentCommand(c Command) {
-	fmt.Println("OUTBOUND: ", t.telOptStack.CommandString(c))
+	fmt.Println("OUTBOUND:", t.telOptStack.CommandString(c))
 }
 
 func (t *Terminal) WaitForExit() error {

@@ -116,7 +116,7 @@ type TelnetOption interface {
 	SubnegotiationString(subnegotiation []byte) (string, error)
 }
 
-type TelOptPreferences struct {
+type TelOptOptions struct {
 	AllowRemote   []TelOptCode
 	RequestRemote []TelOptCode
 	AllowLocal    []TelOptCode
@@ -150,7 +150,7 @@ type telOptStack struct {
 	awaitedRequests int
 }
 
-func newTelOptStack(cache *TelOptCache, preferences TelOptPreferences) *telOptStack {
+func newTelOptStack(cache *TelOptCache, preferences TelOptOptions) *telOptStack {
 	allowRemote := make(map[TelOptCode]struct{})
 	for _, telOpt := range preferences.AllowRemote {
 		allowRemote[telOpt] = struct{}{}

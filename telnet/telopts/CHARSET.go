@@ -132,7 +132,7 @@ func (o *CHARSET) TransitionLocalState(newState telnet.TelOptState) error {
 	// Send REQUEST- if we don't have any preferred charsets we don't care so we won't
 	// send anything
 	if len(o.options.PreferredCharsets) > 0 {
-		o.Terminal().Keyboard().SetLock(charsetKeyboardLock, LocalBlockTimeout)
+		o.Terminal().Keyboard().SetLock(charsetKeyboardLock, telnet.DefaultKeyboardLock)
 		return o.writeRequest(o.options.PreferredCharsets)
 	}
 
@@ -187,6 +187,11 @@ func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
 	var bestCharSet string
 
 	for i := 1; i < len(charSetList); i++ {
+		if charSetList[i] == "UTF-8" {
+			// We know the remote can handle UTF-8 so use it as our default charset no matter what happens
+			_ = o.Terminal().Charset().PromoteDefaultCharset("US-ASCII", "UTF-8")
+		}
+
 		if o.isAcceptableCharset(charSetList[i]) {
 			bestCharSet = charSetList[i]
 			break
@@ -208,7 +213,7 @@ func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
 	}
 
 	// We have no reason not to accept the encoding
-	err := o.Terminal().Charset().SetCharset(o.bestRemoteEncoding)
+	err := o.Terminal().Charset().SetNegotiatedCharset(o.bestRemoteEncoding)
 	if err != nil {
 		o.writeReject()
 		return err
@@ -229,7 +234,7 @@ func (o *CHARSET) subnegotiateREJECTED() error {
 	if o.bestRemoteEncoding != "" && o.Terminal().Charset().Name() != o.bestRemoteEncoding && o.Terminal().Side() == telnet.SideServer {
 		// The client rejected us but they did send us some preferences that we rejected due to having
 		// an active local negotiation- let's request that the client use it
-		o.Terminal().Keyboard().SetLock(charsetKeyboardLock, LocalBlockTimeout)
+		o.Terminal().Keyboard().SetLock(charsetKeyboardLock, telnet.DefaultKeyboardLock)
 		return o.writeRequest([]string{o.bestRemoteEncoding})
 	}
 
@@ -251,7 +256,7 @@ func (o *CHARSET) subnegotiateACCEPTED(subnegotiation []byte) error {
 	o.bestRemoteEncoding = charSet
 	o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
 
-	return o.Terminal().Charset().SetCharset(charSet)
+	return o.Terminal().Charset().SetNegotiatedCharset(charSet)
 }
 
 func (o *CHARSET) Subnegotiate(subnegotiation []byte) error {

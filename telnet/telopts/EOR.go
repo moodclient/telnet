@@ -5,6 +5,7 @@ import (
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
+const eorKeyboardLock string = "lock.eor"
 const CodeEOR telnet.TelOptCode = 25
 
 func EORRegistration() telnet.TelOptFactory {
@@ -30,6 +31,13 @@ func (o *EOR) String() string {
 }
 
 func (o *EOR) TransitionLocalState(newState telnet.TelOptState) error {
+	if newState == telnet.TelOptRequested {
+		o.Terminal().Keyboard().SetLock(eorKeyboardLock, telnet.DefaultKeyboardLock)
+		return nil
+	}
+
+	o.Terminal().Keyboard().ClearLock(eorKeyboardLock)
+
 	if newState == telnet.TelOptActive {
 		o.Terminal().Keyboard().SetPromptCommand(telnet.PromptCommandEOR)
 	} else if newState == telnet.TelOptInactive {

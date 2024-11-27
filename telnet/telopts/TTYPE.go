@@ -92,13 +92,13 @@ func (o *TTYPE) TransitionRemoteState(newState telnet.TelOptState) error {
 		// If we didn't request to use TTYPE but the client did, start blocking outbound until we harvest
 		// all the info we want
 		if !o.Terminal().Keyboard().HasActiveLock(ttypeKeyboardLock) {
-			o.Terminal().Keyboard().SetLock(ttypeKeyboardLock, LocalBlockTimeout)
+			o.Terminal().Keyboard().SetLock(ttypeKeyboardLock, telnet.DefaultKeyboardLock)
 		}
 
 		o.writeRequestSend()
 	} else if newState == telnet.TelOptRequested {
 		// Start blocking outbound when we request to use TTYPE until we harvest all the info we want
-		o.Terminal().Keyboard().SetLock(ttypeKeyboardLock, LocalBlockTimeout)
+		o.Terminal().Keyboard().SetLock(ttypeKeyboardLock, telnet.DefaultKeyboardLock)
 	}
 
 	return nil

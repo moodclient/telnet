@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"github.com/cannibalvox/moodclient/telnet"
@@ -12,7 +13,7 @@ import (
 )
 
 func main() {
-	addr, err := net.ResolveTCPAddr("tcp", "erionmud.com:1234")
+	addr, err := net.ResolveTCPAddr("tcp", "tdod.org:3000")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -59,6 +60,11 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	err = telnet.RegisterOption[telopts.TRANSMITBINARY](telopts.TRANSMITBINARYRegistration())
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	err = telnet.RegisterOption[telopts.TTYPE](telopts.TTYPERegistration([]string{
 		"MOODCLIENT",
 		"XTERM-256COLOR",
@@ -68,17 +74,27 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	c, err := telnet.NewTerminal(context.Background(), conn, telnet.SideClient, telnet.TelOptPreferences{
-		AllowLocal:  []telnet.TelOptCode{telopts.CodeEOR, telopts.CodeCHARSET, telopts.CodeNAWS, telopts.CodeTTYPE, telopts.CodeSUPPRESSGOAHEAD},
-		AllowRemote: []telnet.TelOptCode{telopts.CodeECHO, telopts.CodeEOR, telopts.CodeCHARSET, telopts.CodeSUPPRESSGOAHEAD},
+	c, err := telnet.NewTerminal(context.Background(), conn, telnet.TerminalOptions{
+		Side:               telnet.SideClient,
+		DefaultCharsetName: "US-ASCII",
+		CharsetUsage:       telnet.CharsetUsageBinary,
+		TelOpts: telnet.TelOptOptions{
+			AllowLocal:  []telnet.TelOptCode{telopts.CodeTRANSMITBINARY, telopts.CodeEOR, telopts.CodeCHARSET, telopts.CodeNAWS, telopts.CodeTTYPE, telopts.CodeSUPPRESSGOAHEAD},
+			AllowRemote: []telnet.TelOptCode{telopts.CodeTRANSMITBINARY, telopts.CodeECHO, telopts.CodeEOR, telopts.CodeCHARSET, telopts.CodeSUPPRESSGOAHEAD},
+		},
 	})
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	_, err = fmt.Scanln()
-	if err != nil {
-		log.Fatalln(err)
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			break
+		}
+		fmt.Println(line)
+		break
 	}
 
 	cancel()

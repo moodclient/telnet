@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const DefaultKeyboardLock = 5 * time.Second
+
 type keyboardLock struct {
 	control        sync.Mutex
 	locks          map[string]time.Time
