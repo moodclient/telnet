@@ -90,12 +90,12 @@ func main() {
 			telopts.SENDLOCATION(telnet.TelOptAllowLocal, "SOMEWHERE MYSTERIOUS"),
 		},
 		EventHooks: telnet.EventHooks{
-			IncomingCommand:   incomingCommand,
-			IncomingText:      incomingText,
-			OutboundCommand:   outboundCommand,
-			OutboundText:      outboundText,
-			EncounteredError:  encounteredError,
-			TelOptStateChange: telOptStateChange,
+			IncomingCommand:   []telnet.CommandEvent{incomingCommand},
+			IncomingText:      []telnet.IncomingTextEvent{incomingText},
+			OutboundCommand:   []telnet.CommandEvent{outboundCommand},
+			OutboundText:      []telnet.OutboundTextEvent{outboundText},
+			EncounteredError:  []telnet.ErrorEvent{encounteredError},
+			TelOptStateChange: []telnet.TelOptStateChangeEvent{telOptStateChange},
 		},
 	})
 	if err != nil {
