@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/cannibalvox/moodclient/telnet"
 	"strings"
+	"sync"
 )
 
 const ttype telnet.TelOptCode = 24
@@ -26,15 +27,13 @@ func TTYPE(usage telnet.TelOptUsage, localTerminals []string) telnet.TelnetOptio
 type TTYPEOption struct {
 	BaseTelOpt
 
+	terminalLock sync.Mutex
+
 	localTerminalCursor int
 	localTerminals      []string
 
-	remoteReady     bool
 	remoteTerminals []string
 }
-
-var TTYPEInstance = &TTYPEOption{}
-var _ telnet.TelnetOption = TTYPEInstance
 
 func (o *TTYPEOption) Code() telnet.TelOptCode {
 	return ttype
@@ -70,6 +69,9 @@ func (o *TTYPEOption) TransitionLocalState(newState telnet.TelOptState) error {
 		return err
 	}
 
+	o.terminalLock.Lock()
+	defer o.terminalLock.Unlock()
+
 	if newState == telnet.TelOptInactive {
 		o.localTerminalCursor = 0
 	}
@@ -83,9 +85,11 @@ func (o *TTYPEOption) TransitionRemoteState(newState telnet.TelOptState) error {
 		return err
 	}
 
+	o.terminalLock.Lock()
+	defer o.terminalLock.Unlock()
+
 	if newState == telnet.TelOptInactive {
 		o.remoteTerminals = nil
-		o.remoteReady = false
 	} else if newState == telnet.TelOptActive {
 		// If we didn't request to use TTYPE but the client did, start blocking outbound until we harvest
 		// all the info we want
@@ -126,6 +130,9 @@ func (o *TTYPEOption) Subnegotiate(subnegotiation []byte) error {
 		return errors.New("ttype: received empty subnegotiation")
 	}
 
+	o.terminalLock.Lock()
+	defer o.terminalLock.Unlock()
+
 	// Remote is sending us an IS subnegotation giving us a terminal
 	if subnegotiation[0] == ttypeIS {
 		if o.RemoteState() != telnet.TelOptActive {
@@ -143,7 +150,6 @@ func (o *TTYPEOption) Subnegotiate(subnegotiation []byte) error {
 			o.writeRequestSend()
 		} else {
 			o.Terminal().Keyboard().ClearLock(ttypeKeyboardLock)
-			o.remoteReady = true
 		}
 
 		return nil
@@ -177,13 +183,15 @@ func (o *TTYPEOption) Subnegotiate(subnegotiation []byte) error {
 }
 
 func (o *TTYPEOption) SetLocalTerminals(terminals []string) {
+	o.terminalLock.Lock()
+	defer o.terminalLock.Unlock()
+
 	o.localTerminals = terminals
 }
 
 func (o *TTYPEOption) GetRemoteTerminals() []string {
-	return o.remoteTerminals
-}
+	o.terminalLock.Lock()
+	defer o.terminalLock.Unlock()
 
-func (o *TTYPEOption) IsRemoteReady() bool {
-	return o.remoteReady
+	return o.remoteTerminals
 }

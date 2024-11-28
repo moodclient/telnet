@@ -18,8 +18,6 @@ type SUPPRESSGOAHEADOption struct {
 	BaseTelOpt
 }
 
-var _ telnet.TelnetOption = &SUPPRESSGOAHEADOption{}
-
 func (o *SUPPRESSGOAHEADOption) Code() telnet.TelOptCode {
 	return suppressgoahead
 }

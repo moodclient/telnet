@@ -22,8 +22,6 @@ type ECHOOption struct {
 	BaseTelOpt
 }
 
-var _ telnet.TelnetOption = &ECHOOption{}
-
 func (o *ECHOOption) Code() telnet.TelOptCode {
 	return echo
 }

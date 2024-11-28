@@ -2,29 +2,30 @@ package telopts
 
 import (
 	"github.com/cannibalvox/moodclient/telnet"
+	"sync/atomic"
 )
 
 type BaseTelOpt struct {
 	terminal    *telnet.Terminal
-	localState  telnet.TelOptState
-	remoteState telnet.TelOptState
+	localState  uint32
+	remoteState uint32
 	usage       telnet.TelOptUsage
 }
 
 func NewBaseTelOpt(usage telnet.TelOptUsage) BaseTelOpt {
 	return BaseTelOpt{
 		usage:       usage,
-		localState:  telnet.TelOptInactive,
-		remoteState: telnet.TelOptInactive,
+		localState:  uint32(telnet.TelOptInactive),
+		remoteState: uint32(telnet.TelOptInactive),
 	}
 }
 
 func (o *BaseTelOpt) LocalState() telnet.TelOptState {
-	return o.localState
+	return telnet.TelOptState(atomic.LoadUint32(&o.localState))
 }
 
 func (o *BaseTelOpt) RemoteState() telnet.TelOptState {
-	return o.remoteState
+	return telnet.TelOptState(atomic.LoadUint32(&o.remoteState))
 }
 
 func (o *BaseTelOpt) Usage() telnet.TelOptUsage {
@@ -40,12 +41,12 @@ func (o *BaseTelOpt) Terminal() *telnet.Terminal {
 }
 
 func (o *BaseTelOpt) TransitionLocalState(newState telnet.TelOptState) error {
-	o.localState = newState
+	atomic.StoreUint32(&o.localState, uint32(newState))
 
 	return nil
 }
 
 func (o *BaseTelOpt) TransitionRemoteState(newState telnet.TelOptState) error {
-	o.remoteState = newState
+	atomic.StoreUint32(&o.remoteState, uint32(newState))
 	return nil
 }

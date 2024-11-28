@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	addr, err := net.ResolveTCPAddr("tcp", "tdod.org:3000")
+	addr, err := net.ResolveTCPAddr("tcp", "erionmud.com:1234")
 	if err != nil {
 		log.Fatalln(err)
 	}

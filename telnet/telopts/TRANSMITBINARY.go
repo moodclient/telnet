@@ -18,8 +18,6 @@ type TRANSMITBINARYOption struct {
 	BaseTelOpt
 }
 
-var _ telnet.TelnetOption = &TRANSMITBINARYOption{}
-
 func (o *TRANSMITBINARYOption) Code() telnet.TelOptCode {
 	return transmitbinary
 }
@@ -40,7 +38,7 @@ func (o *TRANSMITBINARYOption) TransitionLocalState(newState telnet.TelOptState)
 	}
 
 	o.Terminal().Keyboard().ClearLock(transmitbinaryKeyboardLock)
-	o.Terminal().Charset().BinaryEncode = newState == telnet.TelOptActive
+	o.Terminal().Charset().SetBinaryEncode(newState == telnet.TelOptActive)
 
 	return nil
 }
@@ -52,9 +50,9 @@ func (o *TRANSMITBINARYOption) TransitionRemoteState(newState telnet.TelOptState
 	}
 
 	if newState == telnet.TelOptActive {
-		o.Terminal().Charset().BinaryDecode = true
+		o.Terminal().Charset().SetBinaryDecode(true)
 	} else if newState == telnet.TelOptInactive {
-		o.Terminal().Charset().BinaryDecode = false
+		o.Terminal().Charset().SetBinaryDecode(false)
 	}
 
 	return nil

@@ -50,8 +50,6 @@ type CHARSETOption struct {
 	localAllowedCharsets map[string]struct{}
 }
 
-var _ telnet.TelnetOption = &CHARSETOption{}
-
 func (o *CHARSETOption) writeRequest(charSets []string) error {
 	subnegotiation := bytes.NewBuffer(nil)
 	err := subnegotiation.WriteByte(charsetREQUEST)

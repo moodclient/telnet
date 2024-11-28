@@ -5,6 +5,7 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/ianaindex"
 	"strings"
+	"sync/atomic"
 )
 
 type Coder interface {
@@ -20,8 +21,8 @@ type currentCharset struct {
 
 type Charset struct {
 	usage        CharsetUsage
-	BinaryEncode bool
-	BinaryDecode bool
+	binaryEncode atomic.Bool
+	binaryDecode atomic.Bool
 
 	defaultCharset currentCharset
 	negotiated     currentCharset
@@ -43,6 +44,22 @@ func NewCharset(defaultCodePage string, usage CharsetUsage) (*Charset, error) {
 	return charset, nil
 }
 
+func (c *Charset) SetBinaryEncode(encode bool) {
+	c.binaryEncode.Store(encode)
+}
+
+func (c *Charset) SetBinaryDecode(decode bool) {
+	c.binaryDecode.Store(decode)
+}
+
+func (c *Charset) BinaryEncode() bool {
+	return c.binaryEncode.Load()
+}
+
+func (c *Charset) BinaryDecode() bool {
+	return c.binaryDecode.Load()
+}
+
 func (c *Charset) NegotiatedCharsetName() string {
 	return c.negotiated.name
 }
@@ -52,14 +69,14 @@ func (c *Charset) DefaultCharsetName() string {
 }
 
 func (c *Charset) EncodingName() string {
-	if c.usage == CharsetUsageAlways || c.BinaryEncode {
+	if c.usage == CharsetUsageAlways || c.binaryEncode.Load() {
 		return c.negotiated.name
 	}
 	return c.defaultCharset.name
 }
 
 func (c *Charset) DecodingName() string {
-	if c.usage == CharsetUsageAlways || c.BinaryDecode {
+	if c.usage == CharsetUsageAlways || c.binaryDecode.Load() {
 		return c.negotiated.name
 	}
 
@@ -67,7 +84,7 @@ func (c *Charset) DecodingName() string {
 }
 
 func (c *Charset) Encode(utf8Text string) ([]byte, error) {
-	if c.usage == CharsetUsageAlways || c.BinaryEncode {
+	if c.usage == CharsetUsageAlways || c.binaryEncode.Load() {
 		return c.negotiated.encoder.Bytes([]byte(utf8Text))
 	}
 	return c.defaultCharset.encoder.Bytes([]byte(utf8Text))
@@ -76,7 +93,7 @@ func (c *Charset) Encode(utf8Text string) ([]byte, error) {
 func (c *Charset) Decode(incomingText []byte) (string, error) {
 	var charset currentCharset
 
-	if c.usage == CharsetUsageAlways || c.BinaryDecode {
+	if c.usage == CharsetUsageAlways || c.binaryDecode.Load() {
 		charset = c.negotiated
 	} else {
 		charset = c.defaultCharset

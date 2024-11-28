@@ -18,8 +18,6 @@ type EOROption struct {
 	BaseTelOpt
 }
 
-var _ telnet.TelnetOption = &EOROption{}
-
 func (o *EOROption) Code() telnet.TelOptCode {
 	return eor
 }
