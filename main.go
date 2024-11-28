@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	addr, err := net.ResolveTCPAddr("tcp", "erionmud.com:1234")
+	addr, err := net.ResolveTCPAddr("tcp", "eternalfantasy.org:3333")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -50,6 +50,9 @@ func main() {
 			}),
 			telopts.SUPPRESSGOAHEAD(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
 			telopts.NAWS(telnet.TelOptAllowLocal),
+			telopts.NEWENVIRON(telnet.TelOptAllowRemote|telnet.TelOptAllowLocal, telopts.NEWENVIRONConfig{
+				WellKnownVarKeys: telopts.NEWENVIRONWellKnownVars,
+			}),
 		},
 	})
 	if err != nil {

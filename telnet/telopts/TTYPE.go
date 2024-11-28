@@ -27,7 +27,8 @@ func TTYPE(usage telnet.TelOptUsage, localTerminals []string) telnet.TelnetOptio
 type TTYPEOption struct {
 	BaseTelOpt
 
-	terminalLock sync.Mutex
+	localTerminalLock  sync.Mutex
+	remoteTerminalLock sync.Mutex
 
 	localTerminalCursor int
 	localTerminals      []string
@@ -69,9 +70,6 @@ func (o *TTYPEOption) TransitionLocalState(newState telnet.TelOptState) error {
 		return err
 	}
 
-	o.terminalLock.Lock()
-	defer o.terminalLock.Unlock()
-
 	if newState == telnet.TelOptInactive {
 		o.localTerminalCursor = 0
 	}
@@ -85,11 +83,13 @@ func (o *TTYPEOption) TransitionRemoteState(newState telnet.TelOptState) error {
 		return err
 	}
 
-	o.terminalLock.Lock()
-	defer o.terminalLock.Unlock()
-
 	if newState == telnet.TelOptInactive {
+		o.remoteTerminalLock.Lock()
+		defer o.remoteTerminalLock.Unlock()
+
 		o.remoteTerminals = nil
+
+		return nil
 	} else if newState == telnet.TelOptActive {
 		// If we didn't request to use TTYPE but the client did, start blocking outbound until we harvest
 		// all the info we want
@@ -97,7 +97,12 @@ func (o *TTYPEOption) TransitionRemoteState(newState telnet.TelOptState) error {
 			o.Terminal().Keyboard().SetLock(ttypeKeyboardLock, telnet.DefaultKeyboardLock)
 		}
 
+		o.localTerminalLock.Lock()
+		defer o.localTerminalLock.Unlock()
+
 		o.writeRequestSend()
+
+		return nil
 	} else if newState == telnet.TelOptRequested {
 		// Start blocking outbound when we request to use TTYPE until we harvest all the info we want
 		o.Terminal().Keyboard().SetLock(ttypeKeyboardLock, telnet.DefaultKeyboardLock)
@@ -130,14 +135,14 @@ func (o *TTYPEOption) Subnegotiate(subnegotiation []byte) error {
 		return errors.New("ttype: received empty subnegotiation")
 	}
 
-	o.terminalLock.Lock()
-	defer o.terminalLock.Unlock()
-
 	// Remote is sending us an IS subnegotation giving us a terminal
 	if subnegotiation[0] == ttypeIS {
 		if o.RemoteState() != telnet.TelOptActive {
 			return nil
 		}
+
+		o.remoteTerminalLock.Lock()
+		defer o.remoteTerminalLock.Unlock()
 
 		var newTerminal string
 		if len(subnegotiation) > 1 {
@@ -161,6 +166,9 @@ func (o *TTYPEOption) Subnegotiate(subnegotiation []byte) error {
 			return nil
 		}
 
+		o.localTerminalLock.Lock()
+		defer o.localTerminalLock.Unlock()
+
 		if len(o.localTerminals) == 0 {
 			o.writeTerminal("UNKNOWN")
 			return nil
@@ -183,15 +191,15 @@ func (o *TTYPEOption) Subnegotiate(subnegotiation []byte) error {
 }
 
 func (o *TTYPEOption) SetLocalTerminals(terminals []string) {
-	o.terminalLock.Lock()
-	defer o.terminalLock.Unlock()
+	o.localTerminalLock.Lock()
+	defer o.localTerminalLock.Unlock()
 
 	o.localTerminals = terminals
 }
 
 func (o *TTYPEOption) GetRemoteTerminals() []string {
-	o.terminalLock.Lock()
-	defer o.terminalLock.Unlock()
+	o.remoteTerminalLock.Lock()
+	defer o.remoteTerminalLock.Unlock()
 
 	return o.remoteTerminals
 }
