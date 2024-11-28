@@ -44,7 +44,10 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 		printer:  printer,
 	}
 
-	terminal.telOptStack = newTelOptStack(terminal, config.TelOpts)
+	terminal.telOptStack, err = newTelOptStack(terminal, config.TelOpts)
+	if err != nil {
+		return nil, err
+	}
 
 	// Run the keyboard, printer, and terminal loop until the connection is closed
 	// or the consumer kills the context

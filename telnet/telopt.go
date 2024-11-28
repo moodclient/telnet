@@ -85,18 +85,23 @@ type telOptStack struct {
 	options map[TelOptCode]TelnetOption
 }
 
-func newTelOptStack(terminal *Terminal, options []TelnetOption) *telOptStack {
+func newTelOptStack(terminal *Terminal, options []TelnetOption) (*telOptStack, error) {
 
 	optionMap := make(map[TelOptCode]TelnetOption)
 
 	for _, option := range options {
+		oldOption, hasOldOption := optionMap[option.Code()]
+		if hasOldOption {
+			return nil, fmt.Errorf("telopt collision: TelOpt %d is already registered to an option of type %T. it cannot be registered to an option of type %T", option.Code(), oldOption, option)
+		}
+
 		option.Initialize(terminal)
 		optionMap[option.Code()] = option
 	}
 
 	return &telOptStack{
 		options: optionMap,
-	}
+	}, nil
 }
 
 func (s *telOptStack) rejectNegotiationRequest(terminal *Terminal, c Command) {
