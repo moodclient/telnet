@@ -187,6 +187,7 @@ func (o *CHARSETOption) subnegotiateREQUEST(subnegotiation []byte) error {
 	for i := 1; i < len(charSetList); i++ {
 		if charSetList[i] == "UTF-8" {
 			// We know the remote can handle UTF-8 so use it as our default charset no matter what happens
+			// this will allow the consumer to ask the terminal whether the remote can handle UTF-8
 			_ = o.Terminal().Charset().PromoteDefaultCharset("US-ASCII", "UTF-8")
 		}
 
@@ -229,7 +230,7 @@ func (o *CHARSETOption) subnegotiateREJECTED() error {
 		return nil
 	}
 
-	if o.bestRemoteEncoding != "" && o.Terminal().Charset().Name() != o.bestRemoteEncoding && o.Terminal().Side() == telnet.SideServer {
+	if o.bestRemoteEncoding != "" && o.Terminal().Charset().NegotiatedCharsetName() != o.bestRemoteEncoding && o.Terminal().Side() == telnet.SideServer {
 		// The client rejected us but they did send us some preferences that we rejected due to having
 		// an active local negotiation- let's request that the client use it
 		o.Terminal().Keyboard().SetLock(charsetKeyboardLock, telnet.DefaultKeyboardLock)
@@ -296,7 +297,10 @@ func (o *CHARSETOption) SubnegotiationString(subnegotiation []byte) (string, err
 	}
 
 	if subnegotiation[0] == charsetACCEPTED {
-		return "ACCEPTED", nil
+		var sb strings.Builder
+		sb.WriteString("ACCEPTED ")
+		sb.WriteString(string(subnegotiation[1:]))
+		return sb.String(), nil
 	}
 
 	if subnegotiation[0] == charsetTTABLEIS {

@@ -43,8 +43,27 @@ func NewCharset(defaultCodePage string, usage CharsetUsage) (*Charset, error) {
 	return charset, nil
 }
 
-func (c *Charset) Name() string {
+func (c *Charset) NegotiatedCharsetName() string {
 	return c.negotiated.name
+}
+
+func (c *Charset) DefaultCharsetName() string {
+	return c.defaultCharset.name
+}
+
+func (c *Charset) EncodingName() string {
+	if c.usage == CharsetUsageAlways || c.BinaryEncode {
+		return c.negotiated.name
+	}
+	return c.defaultCharset.name
+}
+
+func (c *Charset) DecodingName() string {
+	if c.usage == CharsetUsageAlways || c.BinaryDecode {
+		return c.negotiated.name
+	}
+
+	return c.defaultCharset.name
 }
 
 func (c *Charset) Encode(utf8Text string) ([]byte, error) {
@@ -95,9 +114,20 @@ func (c *Charset) buildCharset(codePage string) (currentCharset, error) {
 		return currentCharset{}, err
 	}
 
+	encoder := charset.NewEncoder()
+	var decoder Coder
+
+	if strings.ToLower(codePage) == "us-ascii" {
+		// Allow the remote to send us UTF-8 even if we think we're ascii. We'll be good citizens
+		// and only send ASCII.
+		decoder = encoding.Replacement.NewEncoder()
+	} else {
+		decoder = charset.NewDecoder()
+	}
+
 	return currentCharset{
-		encoder: charset.NewEncoder(),
-		decoder: charset.NewDecoder(),
+		encoder: encoder,
+		decoder: decoder,
 		name:    name,
 	}, nil
 }
