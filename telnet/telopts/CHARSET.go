@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	CodeCHARSET telnet.TelOptCode = 42
+	charset telnet.TelOptCode = 42
 
 	charsetREQUEST byte = iota
 	charsetACCEPTED
@@ -23,38 +23,36 @@ const (
 
 const charsetKeyboardLock = "lock.charset"
 
-type CHARSETOptions struct {
+type CHARSETConfig struct {
 	PreferredCharsets []string
 	AllowAnyCharset   bool
 }
 
-func CHARSETRegistration(options CHARSETOptions) telnet.TelOptFactory {
+func CHARSET(usage telnet.TelOptUsage, options CHARSETConfig) telnet.TelnetOption {
 	charsets := make(map[string]struct{})
 	for _, c := range options.PreferredCharsets {
 		charsets[c] = struct{}{}
 	}
 
-	return func(terminal *telnet.Terminal) telnet.TelnetOption {
-		return &CHARSET{
-			BaseTelOpt:           NewBaseTelOpt(terminal),
-			options:              options,
-			localAllowedCharsets: charsets,
-		}
+	return &CHARSETOption{
+		BaseTelOpt:           NewBaseTelOpt(usage),
+		options:              options,
+		localAllowedCharsets: charsets,
 	}
 }
 
-type CHARSET struct {
+type CHARSETOption struct {
 	BaseTelOpt
 
-	options CHARSETOptions
+	options CHARSETConfig
 
 	bestRemoteEncoding   string
 	localAllowedCharsets map[string]struct{}
 }
 
-var _ telnet.TelnetOption = &CHARSET{}
+var _ telnet.TelnetOption = &CHARSETOption{}
 
-func (o *CHARSET) writeRequest(charSets []string) error {
+func (o *CHARSETOption) writeRequest(charSets []string) error {
 	subnegotiation := bytes.NewBuffer(nil)
 	err := subnegotiation.WriteByte(charsetREQUEST)
 	if err != nil {
@@ -75,34 +73,34 @@ func (o *CHARSET) writeRequest(charSets []string) error {
 
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
-		Option:         CodeCHARSET,
+		Option:         charset,
 		Subnegotiation: subnegotiation.Bytes(),
 	})
 
 	return nil
 }
 
-func (o *CHARSET) writeAccept(acceptedCharset string) {
+func (o *CHARSETOption) writeAccept(acceptedCharset string) {
 	subnegotiation := make([]byte, 0, len(acceptedCharset)+1)
 	subnegotiation = append(subnegotiation, charsetACCEPTED)
 	subnegotiation = append(subnegotiation, []byte(acceptedCharset)...)
 
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
-		Option:         CodeCHARSET,
+		Option:         charset,
 		Subnegotiation: subnegotiation,
 	})
 }
 
-func (o *CHARSET) writeReject() {
+func (o *CHARSETOption) writeReject() {
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
-		Option:         CodeCHARSET,
+		Option:         charset,
 		Subnegotiation: []byte{charsetREJECTED},
 	})
 }
 
-func (o *CHARSET) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *CHARSETOption) TransitionRemoteState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -115,7 +113,7 @@ func (o *CHARSET) TransitionRemoteState(newState telnet.TelOptState) error {
 	return nil
 }
 
-func (o *CHARSET) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *CHARSETOption) TransitionLocalState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -139,15 +137,15 @@ func (o *CHARSET) TransitionLocalState(newState telnet.TelOptState) error {
 	return nil
 }
 
-func (o *CHARSET) Code() telnet.TelOptCode {
-	return CodeCHARSET
+func (o *CHARSETOption) Code() telnet.TelOptCode {
+	return charset
 }
 
-func (o *CHARSET) String() string {
+func (o *CHARSETOption) String() string {
 	return "CHARSET"
 }
 
-func (o *CHARSET) isAcceptableCharset(charSet string) bool {
+func (o *CHARSETOption) isAcceptableCharset(charSet string) bool {
 	// Has to be a valid IANA encoding name
 	_, err := ianaindex.IANA.Encoding(charSet)
 	if err != nil {
@@ -165,7 +163,7 @@ func (o *CHARSET) isAcceptableCharset(charSet string) bool {
 	return true
 }
 
-func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
+func (o *CHARSETOption) subnegotiateREQUEST(subnegotiation []byte) error {
 	// Some MUDs don't follow this rule!
 	//if o.RemoteState() != telnet.TelOptActive {
 	//	// Inactive sides shouldn't be sending charset requests
@@ -225,7 +223,7 @@ func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
 	return nil
 }
 
-func (o *CHARSET) subnegotiateREJECTED() error {
+func (o *CHARSETOption) subnegotiateREJECTED() error {
 	if o.LocalState() != telnet.TelOptActive {
 		// We may have deactivated while the negotiation was ongoing
 		return nil
@@ -242,7 +240,7 @@ func (o *CHARSET) subnegotiateREJECTED() error {
 	return nil
 }
 
-func (o *CHARSET) subnegotiateACCEPTED(subnegotiation []byte) error {
+func (o *CHARSETOption) subnegotiateACCEPTED(subnegotiation []byte) error {
 	if o.LocalState() != telnet.TelOptActive {
 		// We may have deactivated while the negotiation was ongoing
 		return nil
@@ -250,7 +248,7 @@ func (o *CHARSET) subnegotiateACCEPTED(subnegotiation []byte) error {
 
 	charSet := string(subnegotiation[1:])
 	if !o.isAcceptableCharset(charSet) {
-		return fmt.Errorf("CodeCHARSET: client sent ACCEPT for invalid CodeCHARSET %s", charSet)
+		return fmt.Errorf("charset: client sent ACCEPT for invalid charset %s", charSet)
 	}
 
 	o.bestRemoteEncoding = charSet
@@ -259,7 +257,7 @@ func (o *CHARSET) subnegotiateACCEPTED(subnegotiation []byte) error {
 	return o.Terminal().Charset().SetNegotiatedCharset(charSet)
 }
 
-func (o *CHARSET) Subnegotiate(subnegotiation []byte) error {
+func (o *CHARSETOption) Subnegotiate(subnegotiation []byte) error {
 	if len(subnegotiation) == 0 {
 		return errors.New("charset: received empty subnegotiation")
 	}
@@ -281,7 +279,7 @@ func (o *CHARSET) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("charset: unexpected subnegotiation %+v", subnegotiation)
 }
 
-func (o *CHARSET) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *CHARSETOption) SubnegotiationString(subnegotiation []byte) (string, error) {
 	if len(subnegotiation) == 0 {
 		return "", fmt.Errorf("charset: empty subnegotiation")
 	}

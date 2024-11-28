@@ -5,17 +5,15 @@ import (
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
-const CodeNAWS telnet.TelOptCode = 31
+const naws telnet.TelOptCode = 31
 
-func NAWSRegistration() telnet.TelOptFactory {
-	return func(terminal *telnet.Terminal) telnet.TelnetOption {
-		return &NAWS{
-			BaseTelOpt: NewBaseTelOpt(terminal),
-		}
+func NAWS(usage telnet.TelOptUsage) telnet.TelnetOption {
+	return &NAWSOption{
+		BaseTelOpt: NewBaseTelOpt(usage),
 	}
 }
 
-type NAWS struct {
+type NAWSOption struct {
 	BaseTelOpt
 
 	localWidth   int
@@ -24,20 +22,20 @@ type NAWS struct {
 	remoteHeight int
 }
 
-var _ telnet.TelnetOption = &NAWS{}
+var _ telnet.TelnetOption = &NAWSOption{}
 
-func (o *NAWS) Code() telnet.TelOptCode {
-	return CodeNAWS
+func (o *NAWSOption) Code() telnet.TelOptCode {
+	return naws
 }
 
-func (o *NAWS) String() string {
+func (o *NAWSOption) String() string {
 	return "NAWS"
 }
 
-func (o *NAWS) writeSizeSubnegotiation() {
+func (o *NAWSOption) writeSizeSubnegotiation() {
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode: telnet.SB,
-		Option: CodeNAWS,
+		Option: naws,
 		Subnegotiation: []byte{
 			byte(o.localWidth >> 8),
 			byte(o.localWidth & 0xff),
@@ -47,7 +45,7 @@ func (o *NAWS) writeSizeSubnegotiation() {
 	})
 }
 
-func (o *NAWS) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *NAWSOption) TransitionLocalState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -64,7 +62,7 @@ func (o *NAWS) TransitionLocalState(newState telnet.TelOptState) error {
 	return nil
 }
 
-func (o *NAWS) Subnegotiate(subnegotiation []byte) error {
+func (o *NAWSOption) Subnegotiate(subnegotiation []byte) error {
 	if o.RemoteState() != telnet.TelOptActive {
 		return nil
 	}
@@ -79,11 +77,11 @@ func (o *NAWS) Subnegotiate(subnegotiation []byte) error {
 	return nil
 }
 
-func (o *NAWS) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *NAWSOption) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return fmt.Sprintf("%+v", subnegotiation), nil
 }
 
-func (o *NAWS) SetLocalSize(width, height int) {
+func (o *NAWSOption) SetLocalSize(width, height int) {
 	if o.localWidth == width && o.localHeight == height {
 		return
 	}
@@ -96,6 +94,6 @@ func (o *NAWS) SetLocalSize(width, height int) {
 	}
 }
 
-func (o *NAWS) GetRemoteSize() (width, height int) {
+func (o *NAWSOption) GetRemoteSize() (width, height int) {
 	return o.remoteWidth, o.remoteHeight
 }

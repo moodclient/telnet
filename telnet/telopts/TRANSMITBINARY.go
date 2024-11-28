@@ -6,31 +6,29 @@ import (
 )
 
 const transmitbinaryKeyboardLock string = "lock.binary"
-const CodeTRANSMITBINARY telnet.TelOptCode = 0
+const transmitbinary telnet.TelOptCode = 0
 
-func TRANSMITBINARYRegistration() telnet.TelOptFactory {
-	return func(terminal *telnet.Terminal) telnet.TelnetOption {
-		return &TRANSMITBINARY{
-			NewBaseTelOpt(terminal),
-		}
+func TRANSMITBINARY(usage telnet.TelOptUsage) telnet.TelnetOption {
+	return &TRANSMITBINARYOption{
+		NewBaseTelOpt(usage),
 	}
 }
 
-type TRANSMITBINARY struct {
+type TRANSMITBINARYOption struct {
 	BaseTelOpt
 }
 
-var _ telnet.TelnetOption = &TRANSMITBINARY{}
+var _ telnet.TelnetOption = &TRANSMITBINARYOption{}
 
-func (o *TRANSMITBINARY) Code() telnet.TelOptCode {
-	return CodeTRANSMITBINARY
+func (o *TRANSMITBINARYOption) Code() telnet.TelOptCode {
+	return transmitbinary
 }
 
-func (o *TRANSMITBINARY) String() string {
+func (o *TRANSMITBINARYOption) String() string {
 	return "TRANSMIT-BINARY"
 }
 
-func (o *TRANSMITBINARY) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *TRANSMITBINARYOption) TransitionLocalState(newState telnet.TelOptState) error {
 	if newState == telnet.TelOptRequested {
 		o.Terminal().Keyboard().SetLock(transmitbinaryKeyboardLock, telnet.DefaultKeyboardLock)
 		return nil
@@ -42,7 +40,7 @@ func (o *TRANSMITBINARY) TransitionLocalState(newState telnet.TelOptState) error
 	return nil
 }
 
-func (o *TRANSMITBINARY) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *TRANSMITBINARYOption) TransitionRemoteState(newState telnet.TelOptState) error {
 	if newState == telnet.TelOptActive {
 		o.Terminal().Charset().BinaryDecode = true
 	} else if newState == telnet.TelOptInactive {
@@ -52,10 +50,10 @@ func (o *TRANSMITBINARY) TransitionRemoteState(newState telnet.TelOptState) erro
 	return nil
 }
 
-func (o *TRANSMITBINARY) Subnegotiate(subnegotiation []byte) error {
+func (o *TRANSMITBINARYOption) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("transmit-binary: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *TRANSMITBINARY) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *TRANSMITBINARYOption) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return "", fmt.Errorf("transmit-binary: unknown subnegotiation: %+v", subnegotiation)
 }

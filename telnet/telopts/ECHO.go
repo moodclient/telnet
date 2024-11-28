@@ -5,39 +5,37 @@ import (
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
-const CodeECHO telnet.TelOptCode = 1
+const echo telnet.TelOptCode = 1
 
-func ECHORegistration() telnet.TelOptFactory {
-	return func(terminal *telnet.Terminal) telnet.TelnetOption {
-		return &ECHO{
-			NewBaseTelOpt(terminal),
-		}
+func ECHO(usage telnet.TelOptUsage) telnet.TelnetOption {
+	return &ECHOOption{
+		NewBaseTelOpt(usage),
 	}
 }
 
-// ECHO indicates whether the local will repeat text sent from the remote back to the remote.  In practice,
+// ECHOOption indicates whether the local will repeat text sent from the remote back to the remote.  In practice,
 // clients will tend to echo locally if the remote is not set to echo, so ECHO is used far more often
 // to stop the remote from echoing locally than actually echoing to the remote.  As a result, this
 // telopt doesn't do anything at all, since the lib consumer needs to decide what ECHO being on actually
 // means.
-type ECHO struct {
+type ECHOOption struct {
 	BaseTelOpt
 }
 
-var _ telnet.TelnetOption = &ECHO{}
+var _ telnet.TelnetOption = &ECHOOption{}
 
-func (o *ECHO) Code() telnet.TelOptCode {
-	return CodeECHO
+func (o *ECHOOption) Code() telnet.TelOptCode {
+	return echo
 }
 
-func (o *ECHO) String() string {
+func (o *ECHOOption) String() string {
 	return "ECHO"
 }
 
-func (o *ECHO) Subnegotiate(subnegotiation []byte) error {
+func (o *ECHOOption) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("echo: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *ECHO) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *ECHOOption) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return "", fmt.Errorf("echo: unknown subnegotiation: %+v", subnegotiation)
 }

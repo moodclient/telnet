@@ -1,82 +1,29 @@
 package telnet
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 )
 
+type TelOptUsage byte
+
+// There's no situation where we'd want to request usage of a telopt but not allow the remote to
+// propose it, so the TelOptRequestRemote/Local exposed to consumers includes both flags
+
+const (
+	TelOptAllowRemote TelOptUsage = 1 << iota
+	telOptOnlyRequestRemote
+	TelOptAllowLocal
+	telOptOnlyRequestLocal
+)
+
+const (
+	TelOptRequestRemote TelOptUsage = TelOptAllowRemote | telOptOnlyRequestRemote
+	TelOptRequestLocal  TelOptUsage = TelOptAllowLocal | telOptOnlyRequestLocal
+)
+
 type TelOptCode byte
-type TelOptFactory func(terminal *Terminal) TelnetOption
-
-var ErrOptionCollision = errors.New("telopt: option collision")
-var ErrOptionUnknown = errors.New("telopt: unknown option")
-
-var telOptLibrary = make(map[TelOptCode]TelOptFactory)
-
-func RegisterOption[OptionStruct any, T TypedTelnetOption[OptionStruct]](factory TelOptFactory) error {
-	var zero OptionStruct
-	telnetOpt := T(&zero)
-
-	code := telnetOpt.Code()
-	name := telnetOpt.String()
-
-	oldName, hasOldOption := telOptLibrary[code]
-	if hasOldOption {
-		return fmt.Errorf("%w: could not register option %s because code %d is occupied by option %s", ErrOptionCollision, name, code, oldName)
-	}
-
-	telOptLibrary[code] = factory
-	return nil
-}
-
-type TelOptCache struct {
-	options  map[TelOptCode]TelnetOption
-	terminal *Terminal
-}
-
-func newTelOptCache(terminal *Terminal) *TelOptCache {
-	return &TelOptCache{
-		options:  make(map[TelOptCode]TelnetOption),
-		terminal: terminal,
-	}
-}
-
-func (c *TelOptCache) get(code TelOptCode) (TelnetOption, error) {
-	option, hasOption := c.options[code]
-	if hasOption {
-		return option, nil
-	}
-
-	factory, hasInLibrary := telOptLibrary[code]
-	if !hasInLibrary {
-		return nil, fmt.Errorf("%w: could not find option %d", ErrOptionUnknown, code)
-	}
-
-	option = factory(c.terminal)
-	c.options[code] = option
-	return option, nil
-}
-
-func GetTelOpt[OptionStruct any, T TypedTelnetOption[OptionStruct]](cache *TelOptCache) (T, error) {
-	var zero OptionStruct
-	var err error
-	code := T(&zero).Code()
-
-	option, err := cache.get(code)
-
-	if err != nil {
-		return nil, err
-	}
-
-	typed, ok := option.(T)
-	if !ok {
-		return nil, fmt.Errorf("factory for TelOpt %s did not return type %T- it returned type %T", zero, zero, option)
-	}
-
-	return typed, err
-}
 
 type TypedTelnetOption[OptionStruct any] interface {
 	*OptionStruct
@@ -84,6 +31,8 @@ type TypedTelnetOption[OptionStruct any] interface {
 }
 
 type TelnetOption interface {
+	Initialize(terminal *Terminal)
+
 	// LocalState returns the current state of this option locally- receiving a DO command will activate
 	// it and a DONT command will deactivate it
 	LocalState() TelOptState
@@ -97,6 +46,7 @@ type TelnetOption interface {
 	// String should return the short name used to refer to this option. This method is expected to run
 	// successfully with an uninitialized option
 	String() string
+	Usage() TelOptUsage
 
 	// TransitionLocalState is called when the terminal attempts to change this option to a new state
 	// locally.  This is not called when the option is initialized to Inactive at the start of a new
@@ -116,13 +66,6 @@ type TelnetOption interface {
 	SubnegotiationString(subnegotiation []byte) (string, error)
 }
 
-type TelOptOptions struct {
-	AllowRemote   []TelOptCode
-	RequestRemote []TelOptCode
-	AllowLocal    []TelOptCode
-	RequestLocal  []TelOptCode
-}
-
 type TelOptState byte
 
 const (
@@ -139,42 +82,20 @@ const (
 )
 
 type telOptStack struct {
-	cache *TelOptCache
-
-	allowRemoteSet map[TelOptCode]struct{}
-	allowLocalSet  map[TelOptCode]struct{}
-
-	requestRemote []TelOptCode
-	requestLocal  []TelOptCode
-
-	awaitedRequests int
+	options map[TelOptCode]TelnetOption
 }
 
-func newTelOptStack(cache *TelOptCache, preferences TelOptOptions) *telOptStack {
-	allowRemote := make(map[TelOptCode]struct{})
-	for _, telOpt := range preferences.AllowRemote {
-		allowRemote[telOpt] = struct{}{}
-	}
-	for _, telOpt := range preferences.RequestRemote {
-		allowRemote[telOpt] = struct{}{}
-	}
+func newTelOptStack(terminal *Terminal, options []TelnetOption) *telOptStack {
 
-	allowLocal := make(map[TelOptCode]struct{})
-	for _, telOpt := range preferences.AllowLocal {
-		allowLocal[telOpt] = struct{}{}
-	}
-	for _, telOpt := range preferences.RequestLocal {
-		allowLocal[telOpt] = struct{}{}
+	optionMap := make(map[TelOptCode]TelnetOption)
+
+	for _, option := range options {
+		option.Initialize(terminal)
+		optionMap[option.Code()] = option
 	}
 
 	return &telOptStack{
-		cache: cache,
-
-		allowRemoteSet: allowRemote,
-		allowLocalSet:  allowLocal,
-
-		requestRemote: preferences.RequestRemote,
-		requestLocal:  preferences.RequestLocal,
+		options: optionMap,
 	}
 }
 
@@ -185,13 +106,10 @@ func (s *telOptStack) rejectNegotiationRequest(terminal *Terminal, c Command) {
 }
 
 func (s *telOptStack) processSubnegotiation(c Command) error {
-	option, err := s.cache.get(c.Option)
-
-	if errors.Is(err, ErrOptionUnknown) {
+	option, hasOption := s.options[c.Option]
+	if !hasOption {
 		// Getting subnegotiations for stuff we haven't agreed to
 		return nil
-	} else if err != nil {
-		return err
 	}
 
 	if option.LocalState() != TelOptActive && option.RemoteState() != TelOptActive {
@@ -203,50 +121,38 @@ func (s *telOptStack) processSubnegotiation(c Command) error {
 }
 
 func (s *telOptStack) WriteRequests(terminal *Terminal) error {
-	for _, request := range s.requestLocal {
-		terminal.Keyboard().WriteCommand(Command{
-			OpCode: WILL,
-			Option: request,
-		})
-		option, err := s.cache.get(request)
-		if err != nil {
-			return err
-		}
-		oldState := option.LocalState()
+	for _, option := range s.options {
+		usage := option.Usage()
+		if usage&telOptOnlyRequestLocal != 0 {
+			terminal.Keyboard().WriteCommand(Command{
+				OpCode: WILL,
+				Option: option.Code(),
+			})
 
-		if oldState == TelOptActive {
-			continue
-		} else if oldState != TelOptRequested {
-			s.awaitedRequests++
-		}
+			oldState := option.LocalState()
 
-		err = option.TransitionLocalState(TelOptRequested)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, request := range s.requestRemote {
-		terminal.Keyboard().WriteCommand(Command{
-			OpCode: DO,
-			Option: request,
-		})
-		option, err := s.cache.get(request)
-		if err != nil {
-			return err
+			if oldState == TelOptInactive {
+				err := option.TransitionLocalState(TelOptRequested)
+				if err != nil {
+					return err
+				}
+			}
 		}
 
-		oldState := option.RemoteState()
+		if usage&telOptOnlyRequestRemote != 0 {
+			terminal.Keyboard().WriteCommand(Command{
+				OpCode: DO,
+				Option: option.Code(),
+			})
 
-		if oldState == TelOptActive {
-			continue
-		} else if oldState != TelOptRequested {
-			s.awaitedRequests++
-		}
+			oldState := option.RemoteState()
 
-		err = option.TransitionRemoteState(TelOptRequested)
-		if err != nil {
-			return err
+			if oldState == TelOptInactive {
+				err := option.TransitionRemoteState(TelOptRequested)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 
@@ -264,8 +170,8 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 	}
 
 	// Is this an option we know about?
-	option, err := s.cache.get(c.Option)
-	if errors.Is(err, ErrOptionUnknown) {
+	option, hasOption := s.options[c.Option]
+	if !hasOption {
 		// Unregistered telopt
 		s.rejectNegotiationRequest(terminal, c)
 
@@ -274,11 +180,11 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 
 	oldState := option.RemoteState()
 	transitionFunc := option.TransitionRemoteState
-	allowList := s.allowRemoteSet
+	allowFlag := TelOptAllowRemote
 	if c.IsRequestForLocal() {
 		oldState = option.LocalState()
 		transitionFunc = option.TransitionLocalState
-		allowList = s.allowLocalSet
+		allowFlag = TelOptAllowLocal
 	}
 
 	// They are requesting WONT/DONT
@@ -286,10 +192,6 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 		// already turned off
 		return nil
 	} else if !c.IsNegotiationRequest() {
-		if oldState == TelOptRequested {
-			s.awaitedRequests--
-		}
-
 		// need to turn it off
 		return transitionFunc(TelOptInactive)
 	}
@@ -300,8 +202,7 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 		return nil
 	}
 
-	_, isAllowed := allowList[c.Option]
-	if !isAllowed {
+	if option.Usage()&allowFlag == 0 {
 		// Disallowed telopt
 		s.rejectNegotiationRequest(terminal, c)
 
@@ -311,8 +212,6 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 	if oldState == TelOptInactive {
 		// Need to send an accept command
 		terminal.Keyboard().WriteCommand(c.Accept())
-	} else if oldState == TelOptRequested {
-		s.awaitedRequests--
 	}
 
 	return transitionFunc(TelOptActive)
@@ -335,9 +234,9 @@ func (s *telOptStack) CommandString(c Command) string {
 
 	sb.WriteByte(' ')
 
-	option, optErr := s.cache.get(c.Option)
+	option, hasOption := s.options[c.Option]
 
-	if optErr != nil {
+	if !hasOption {
 		sb.WriteString("? Unknown Option ")
 		sb.WriteString(strconv.Itoa(int(c.Option)))
 		sb.WriteString("?")
@@ -351,7 +250,7 @@ func (s *telOptStack) CommandString(c Command) string {
 
 	sb.WriteByte(' ')
 
-	if optErr != nil {
+	if !hasOption {
 		sb.WriteString(fmt.Sprintf("%+v", c.Subnegotiation))
 	} else {
 		str, err := option.SubnegotiationString(c.Subnegotiation)
@@ -365,4 +264,23 @@ func (s *telOptStack) CommandString(c Command) string {
 
 	sb.WriteString(" IAC SE")
 	return sb.String()
+}
+
+func GetTelOpt[OptionStruct any, T TypedTelnetOption[OptionStruct]](terminal *Terminal) (T, error) {
+	var zero OptionStruct
+	var err error
+	code := T(&zero).Code()
+
+	option, hasOption := terminal.telOptStack.options[code]
+
+	if !hasOption {
+		return nil, nil
+	}
+
+	typed, ok := option.(T)
+	if !ok {
+		return nil, fmt.Errorf("factory for TelOpt %s did not return type %T- it returned type %T", zero, zero, option)
+	}
+
+	return typed, err
 }

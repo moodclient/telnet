@@ -32,55 +32,24 @@ func main() {
 		_ = conn.Close()
 	}()
 
-	err = telnet.RegisterOption[telopts.CHARSET](telopts.CHARSETRegistration(telopts.CHARSETOptions{
-		AllowAnyCharset:   true,
-		PreferredCharsets: []string{"UTF-8", "US-ASCII"},
-	}))
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	err = telnet.RegisterOption[telopts.ECHO](telopts.ECHORegistration())
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	err = telnet.RegisterOption[telopts.EOR](telopts.EORRegistration())
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	err = telnet.RegisterOption[telopts.NAWS](telopts.NAWSRegistration())
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	err = telnet.RegisterOption[telopts.SUPPRESSGOAHEAD](telopts.SUPPRESSGOAHEADRegistration())
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	err = telnet.RegisterOption[telopts.TRANSMITBINARY](telopts.TRANSMITBINARYRegistration())
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	err = telnet.RegisterOption[telopts.TTYPE](telopts.TTYPERegistration([]string{
-		"MOODCLIENT",
-		"XTERM-256COLOR",
-		"MTTS 299",
-	}))
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	c, err := telnet.NewTerminal(context.Background(), conn, telnet.TerminalOptions{
+	c, err := telnet.NewTerminal(context.Background(), conn, telnet.TerminalConfig{
 		Side:               telnet.SideClient,
 		DefaultCharsetName: "US-ASCII",
-		CharsetUsage:       telnet.CharsetUsageBinary,
-		TelOpts: telnet.TelOptOptions{
-			AllowLocal:  []telnet.TelOptCode{telopts.CodeTRANSMITBINARY, telopts.CodeEOR, telopts.CodeCHARSET, telopts.CodeNAWS, telopts.CodeTTYPE, telopts.CodeSUPPRESSGOAHEAD},
-			AllowRemote: []telnet.TelOptCode{telopts.CodeTRANSMITBINARY, telopts.CodeECHO, telopts.CodeEOR, telopts.CodeCHARSET, telopts.CodeSUPPRESSGOAHEAD},
+		TelOpts: []telnet.TelnetOption{
+			telopts.CHARSET(telnet.TelOptAllowLocal|telnet.TelOptAllowRemote, telopts.CHARSETConfig{
+				AllowAnyCharset:   true,
+				PreferredCharsets: []string{"UTF-8", "US-ASCII"},
+			}),
+			telopts.TRANSMITBINARY(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
+			telopts.EOR(telnet.TelOptAllowRemote | telnet.TelOptAllowLocal),
+			telopts.ECHO(telnet.TelOptAllowRemote),
+			telopts.TTYPE(telnet.TelOptAllowLocal, []string{
+				"MOODCLIENT",
+				"XTERM-256COLOR",
+				"MTTS 299",
+			}),
+			telopts.SUPPRESSGOAHEAD(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
+			telopts.NAWS(telnet.TelOptAllowLocal),
 		},
 	})
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const CodeTTYPE telnet.TelOptCode = 24
+const ttype telnet.TelOptCode = 24
 const ttypeKeyboardLock string = "lock.ttype"
 
 const (
@@ -15,17 +15,15 @@ const (
 	ttypeSEND
 )
 
-func TTYPERegistration(localTerminals []string) telnet.TelOptFactory {
-	return func(terminal *telnet.Terminal) telnet.TelnetOption {
-		return &TTYPE{
-			BaseTelOpt: NewBaseTelOpt(terminal),
+func TTYPE(usage telnet.TelOptUsage, localTerminals []string) telnet.TelnetOption {
+	return &TTYPEOption{
+		BaseTelOpt: NewBaseTelOpt(usage),
 
-			localTerminals: localTerminals,
-		}
+		localTerminals: localTerminals,
 	}
 }
 
-type TTYPE struct {
+type TTYPEOption struct {
 	BaseTelOpt
 
 	localTerminalCursor int
@@ -35,38 +33,38 @@ type TTYPE struct {
 	remoteTerminals []string
 }
 
-var TTYPEInstance = &TTYPE{}
+var TTYPEInstance = &TTYPEOption{}
 var _ telnet.TelnetOption = TTYPEInstance
 
-func (o *TTYPE) Code() telnet.TelOptCode {
-	return CodeTTYPE
+func (o *TTYPEOption) Code() telnet.TelOptCode {
+	return ttype
 }
 
-func (o *TTYPE) String() string {
+func (o *TTYPEOption) String() string {
 	return "TTYPE"
 }
 
-func (o *TTYPE) writeRequestSend() {
+func (o *TTYPEOption) writeRequestSend() {
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
-		Option:         CodeTTYPE,
+		Option:         ttype,
 		Subnegotiation: []byte{ttypeSEND},
 	})
 }
 
-func (o *TTYPE) writeTerminal(terminal string) {
+func (o *TTYPEOption) writeTerminal(terminal string) {
 	terminalBytes := make([]byte, 0, len(terminal)+1)
 	terminalBytes = append(terminalBytes, ttypeIS)
 	terminalBytes = append(terminalBytes, []byte(terminal)...)
 
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
-		Option:         CodeTTYPE,
+		Option:         ttype,
 		Subnegotiation: terminalBytes,
 	})
 }
 
-func (o *TTYPE) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *TTYPEOption) TransitionLocalState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -79,7 +77,7 @@ func (o *TTYPE) TransitionLocalState(newState telnet.TelOptState) error {
 	return nil
 }
 
-func (o *TTYPE) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *TTYPEOption) TransitionRemoteState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
 		return err
@@ -104,7 +102,7 @@ func (o *TTYPE) TransitionRemoteState(newState telnet.TelOptState) error {
 	return nil
 }
 
-func (o *TTYPE) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *TTYPEOption) SubnegotiationString(subnegotiation []byte) (string, error) {
 	if len(subnegotiation) < 1 {
 		return "", errors.New("ttype: received empty subnegotiation")
 	}
@@ -123,7 +121,7 @@ func (o *TTYPE) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return "", fmt.Errorf("ttype: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *TTYPE) Subnegotiate(subnegotiation []byte) error {
+func (o *TTYPEOption) Subnegotiate(subnegotiation []byte) error {
 	if len(subnegotiation) < 1 {
 		return errors.New("ttype: received empty subnegotiation")
 	}
@@ -178,14 +176,14 @@ func (o *TTYPE) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("ttype: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *TTYPE) SetLocalTerminals(terminals []string) {
+func (o *TTYPEOption) SetLocalTerminals(terminals []string) {
 	o.localTerminals = terminals
 }
 
-func (o *TTYPE) GetRemoteTerminals() []string {
+func (o *TTYPEOption) GetRemoteTerminals() []string {
 	return o.remoteTerminals
 }
 
-func (o *TTYPE) IsRemoteReady() bool {
+func (o *TTYPEOption) IsRemoteReady() bool {
 	return o.remoteReady
 }

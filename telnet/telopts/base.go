@@ -8,11 +8,12 @@ type BaseTelOpt struct {
 	terminal    *telnet.Terminal
 	localState  telnet.TelOptState
 	remoteState telnet.TelOptState
+	usage       telnet.TelOptUsage
 }
 
-func NewBaseTelOpt(terminal *telnet.Terminal) BaseTelOpt {
+func NewBaseTelOpt(usage telnet.TelOptUsage) BaseTelOpt {
 	return BaseTelOpt{
-		terminal:    terminal,
+		usage:       usage,
 		localState:  telnet.TelOptInactive,
 		remoteState: telnet.TelOptInactive,
 	}
@@ -24,6 +25,14 @@ func (o *BaseTelOpt) LocalState() telnet.TelOptState {
 
 func (o *BaseTelOpt) RemoteState() telnet.TelOptState {
 	return o.remoteState
+}
+
+func (o *BaseTelOpt) Usage() telnet.TelOptUsage {
+	return o.usage
+}
+
+func (o *BaseTelOpt) Initialize(terminal *telnet.Terminal) {
+	o.terminal = terminal
 }
 
 func (o *BaseTelOpt) Terminal() *telnet.Terminal {

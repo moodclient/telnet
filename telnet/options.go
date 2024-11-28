@@ -11,15 +11,15 @@ const (
 type CharsetUsage byte
 
 const (
-	// CharsetUsageAlways indicates that text communications should always use a CHARSET-negotiated character
-	// set (if any) instead of the default character set
-	CharsetUsageAlways CharsetUsage = iota
 	// CharsetUsageBinary indicates that text communications should use a CHARSET-negotiated character set
 	// if the connection is in BINARY mode, and the default character set otherwise
-	CharsetUsageBinary
+	CharsetUsageBinary CharsetUsage = iota
+	// CharsetUsageAlways indicates that text communications should always use a CHARSET-negotiated character
+	// set (if any) instead of the default character set
+	CharsetUsageAlways
 )
 
-type TerminalOptions struct {
+type TerminalConfig struct {
 	// DefaultCharsetName is the registered IANA name of the character set to use for all communications not
 	// sent via a negotiated charset (via the CHARSET telopt). RFC 854 (Telnet Protocol) specifies that by
 	// default, communications take place in ASCII encoding.  RFC 5198 specified that since 2008, communications
@@ -60,5 +60,5 @@ type TerminalOptions struct {
 
 	// TelOpts indicates which TelOpts the terminal should request from the remote, and which the remote
 	// should be permitted to request from us.
-	TelOpts TelOptOptions
+	TelOpts []TelnetOption
 }

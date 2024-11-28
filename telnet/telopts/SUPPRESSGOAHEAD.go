@@ -6,31 +6,29 @@ import (
 )
 
 const suppressgoaheadKeyboardLock string = "lock.suppress-go-ahead"
-const CodeSUPPRESSGOAHEAD telnet.TelOptCode = 3
+const suppressgoahead telnet.TelOptCode = 3
 
-func SUPPRESSGOAHEADRegistration() telnet.TelOptFactory {
-	return func(terminal *telnet.Terminal) telnet.TelnetOption {
-		return &SUPPRESSGOAHEAD{
-			NewBaseTelOpt(terminal),
-		}
+func SUPPRESSGOAHEAD(usage telnet.TelOptUsage) telnet.TelnetOption {
+	return &SUPPRESSGOAHEADOption{
+		NewBaseTelOpt(usage),
 	}
 }
 
-type SUPPRESSGOAHEAD struct {
+type SUPPRESSGOAHEADOption struct {
 	BaseTelOpt
 }
 
-var _ telnet.TelnetOption = &SUPPRESSGOAHEAD{}
+var _ telnet.TelnetOption = &SUPPRESSGOAHEADOption{}
 
-func (o *SUPPRESSGOAHEAD) Code() telnet.TelOptCode {
-	return CodeSUPPRESSGOAHEAD
+func (o *SUPPRESSGOAHEADOption) Code() telnet.TelOptCode {
+	return suppressgoahead
 }
 
-func (o *SUPPRESSGOAHEAD) String() string {
+func (o *SUPPRESSGOAHEADOption) String() string {
 	return "SUPPRESS-GO-AHEAD"
 }
 
-func (o *SUPPRESSGOAHEAD) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *SUPPRESSGOAHEADOption) TransitionLocalState(newState telnet.TelOptState) error {
 	if newState == telnet.TelOptRequested {
 		o.Terminal().Keyboard().SetLock(suppressgoaheadKeyboardLock, telnet.DefaultKeyboardLock)
 		return nil
@@ -47,7 +45,7 @@ func (o *SUPPRESSGOAHEAD) TransitionLocalState(newState telnet.TelOptState) erro
 	return nil
 }
 
-func (o *SUPPRESSGOAHEAD) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *SUPPRESSGOAHEADOption) TransitionRemoteState(newState telnet.TelOptState) error {
 	if newState == telnet.TelOptActive {
 		o.Terminal().Printer().ClearPromptCommand(telnet.PromptCommandGA)
 	} else if newState == telnet.TelOptInactive {
@@ -57,10 +55,10 @@ func (o *SUPPRESSGOAHEAD) TransitionRemoteState(newState telnet.TelOptState) err
 	return nil
 }
 
-func (o *SUPPRESSGOAHEAD) Subnegotiate(subnegotiation []byte) error {
+func (o *SUPPRESSGOAHEADOption) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("suppress-go-ahead: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *SUPPRESSGOAHEAD) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *SUPPRESSGOAHEADOption) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return "", fmt.Errorf("suppress-go-ahead: unknown subnegotiation: %+v", subnegotiation)
 }

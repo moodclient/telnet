@@ -22,7 +22,7 @@ type Terminal struct {
 	telOptStack *telOptStack
 }
 
-func NewTerminal(ctx context.Context, conn net.Conn, config TerminalOptions) (*Terminal, error) {
+func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Terminal, error) {
 	charset, err := NewCharset(config.DefaultCharsetName, config.CharsetUsage)
 	if err != nil {
 		return nil, err
@@ -44,8 +44,7 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalOptions) (*T
 		printer:  printer,
 	}
 
-	cache := newTelOptCache(terminal)
-	terminal.telOptStack = newTelOptStack(cache, config.TelOpts)
+	terminal.telOptStack = newTelOptStack(terminal, config.TelOpts)
 
 	err = terminal.telOptStack.WriteRequests(terminal)
 	if err != nil {
