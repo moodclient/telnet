@@ -32,6 +32,7 @@ type TypedTelnetOption[OptionStruct any] interface {
 
 type TelnetOption interface {
 	Initialize(terminal *Terminal)
+	Terminal() *Terminal
 
 	// LocalState returns the current state of this option locally- receiving a DO command will activate
 	// it and a DONT command will deactivate it
@@ -141,6 +142,8 @@ func (s *telOptStack) WriteRequests(terminal *Terminal) error {
 				if err != nil {
 					return err
 				}
+
+				option.Terminal().teloptStateChange(option, TelOptSideLocal, oldState)
 			}
 		}
 
@@ -157,6 +160,8 @@ func (s *telOptStack) WriteRequests(terminal *Terminal) error {
 				if err != nil {
 					return err
 				}
+
+				option.Terminal().teloptStateChange(option, TelOptSideRemote, oldState)
 			}
 		}
 	}
@@ -184,10 +189,12 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 	}
 
 	oldState := option.RemoteState()
+	side := TelOptSideRemote
 	transitionFunc := option.TransitionRemoteState
 	allowFlag := TelOptAllowRemote
 	if c.IsRequestForLocal() {
 		oldState = option.LocalState()
+		side = TelOptSideLocal
 		transitionFunc = option.TransitionLocalState
 		allowFlag = TelOptAllowLocal
 	}
@@ -198,7 +205,14 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 		return nil
 	} else if !c.IsNegotiationRequest() {
 		// need to turn it off
-		return transitionFunc(TelOptInactive)
+		err := transitionFunc(TelOptInactive)
+		if err != nil {
+			return err
+		}
+
+		option.Terminal().teloptStateChange(option, side, oldState)
+
+		return nil
 	}
 
 	// They are requesting DO/WILL
@@ -219,7 +233,13 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 		terminal.Keyboard().WriteCommand(c.Accept())
 	}
 
-	return transitionFunc(TelOptActive)
+	err := transitionFunc(TelOptActive)
+	if err != nil {
+		return err
+	}
+
+	terminal.teloptStateChange(option, side, oldState)
+	return nil
 }
 
 func (s *telOptStack) CommandString(c Command) string {

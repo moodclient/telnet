@@ -11,18 +11,17 @@ const (
 	eventError
 	eventCommand
 	eventText
-	eventPrompt
 	eventOutboundCommand
 	eventOutboundText
 )
 
 type eventsTransport struct {
-	eventType     eventType
-	err           error
-	command       Command
-	text          string
-	textOverwrite bool
-	textComplete  bool
+	eventType      eventType
+	err            error
+	command        Command
+	text           string
+	textOverwrite  bool
+	textLineEnding LineEnding
 }
 
 type terminalEventPump struct {
@@ -42,9 +41,7 @@ func (p *terminalEventPump) processEvent(terminal *Terminal, event eventsTranspo
 	case eventCommand:
 		terminal.encounteredCommand(event.command)
 	case eventText:
-		terminal.encounteredText(event.text, event.textOverwrite, event.textComplete)
-	case eventPrompt:
-		terminal.encounteredPrompt(event.text, event.textOverwrite)
+		terminal.encounteredText(event.text, event.textLineEnding, event.textOverwrite)
 	case eventOutboundText:
 		terminal.sentText(event.text)
 	case eventOutboundCommand:
@@ -89,20 +86,12 @@ func (p *terminalEventPump) EncounteredCommand(command Command) {
 	}
 }
 
-func (p *terminalEventPump) EncounteredText(text string, overwrite bool, complete bool) {
+func (p *terminalEventPump) EncounteredText(text string, lineEnding LineEnding, overwrite bool) {
 	p.events <- eventsTransport{
-		eventType:     eventText,
-		text:          text,
-		textOverwrite: overwrite,
-		textComplete:  complete,
-	}
-}
-
-func (p *terminalEventPump) EncounteredPrompt(text string, overwrite bool) {
-	p.events <- eventsTransport{
-		eventType:     eventPrompt,
-		text:          text,
-		textOverwrite: overwrite,
+		eventType:      eventText,
+		text:           text,
+		textOverwrite:  overwrite,
+		textLineEnding: lineEnding,
 	}
 }
 

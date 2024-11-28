@@ -12,8 +12,33 @@ import (
 	"os"
 )
 
+func incomingCommand(t *telnet.Terminal, c telnet.Command) {
+	fmt.Println("COMMAND:", t.CommandString(c))
+}
+
+func encounteredError(t *telnet.Terminal, err error) {
+	fmt.Println(err)
+}
+
+func incomingText(t *telnet.Terminal, data telnet.IncomingTextData) {
+	if data.OverwritePrevious {
+		// Rewrite line
+		fmt.Print(string('\r'))
+	}
+
+	fmt.Print(data.Text)
+}
+
+func outboundText(t *telnet.Terminal, text string) {
+	fmt.Println("SENT:", text)
+}
+
+func outboundCommand(t *telnet.Terminal, c telnet.Command) {
+	fmt.Println("OUTBOUND:", t.CommandString(c))
+}
+
 func main() {
-	addr, err := net.ResolveTCPAddr("tcp", "20forbeers.com:1337")
+	addr, err := net.ResolveTCPAddr("tcp", "erionmud.com:1234")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -55,6 +80,13 @@ func main() {
 			}),
 			telopts.SENDLOCATION(telnet.TelOptAllowLocal, "SOMEWHERE MYSTERIOUS"),
 		},
+		EventHooks: telnet.EventHooks{
+			IncomingCommand:  incomingCommand,
+			IncomingText:     incomingText,
+			OutboundCommand:  outboundCommand,
+			OutboundText:     outboundText,
+			EncounteredError: encounteredError,
+		},
 	})
 	if err != nil {
 		log.Fatalln(err)
@@ -62,11 +94,10 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		line, err := reader.ReadString('\n')
+		_, err = reader.ReadString('\n')
 		if err != nil {
 			break
 		}
-		fmt.Println(line)
 		break
 	}
 

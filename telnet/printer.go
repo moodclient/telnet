@@ -67,14 +67,18 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context) {
 
 		printBytes := p.readyBytes.Bytes()
 		if len(printBytes) > 0 {
-			completeLine := printBytes[len(printBytes)-1] == '\n'
+			var lineEnding LineEnding
+
+			if printBytes[len(printBytes)-1] == '\n' {
+				lineEnding = LineEndingCRLF
+			}
 
 			if len(printBytes) > awaitingMore {
-				p.eventPump.EncounteredText(p.decode(printBytes, completeLine), awaitingMore > 0, completeLine)
+				p.eventPump.EncounteredText(p.decode(printBytes, lineEnding), lineEnding, awaitingMore > 0)
 			}
 
 			awaitingMore = 0
-			if !completeLine {
+			if lineEnding == LineEndingNone {
 				awaitingMore = len(printBytes)
 			}
 		}
@@ -85,7 +89,15 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context) {
 
 		if (p.command.OpCode == GA && p.promptCommands&PromptCommandGA != 0) ||
 			(p.command.OpCode == EOR && p.promptCommands&PromptCommandEOR != 0) {
-			p.eventPump.EncounteredPrompt(p.decode(printBytes, true), awaitingMore > 0)
+
+			var lineEnding LineEnding
+			if p.command.OpCode == GA {
+				lineEnding = LineEndingGA
+			} else {
+				lineEnding = LineEndingEOR
+			}
+
+			p.eventPump.EncounteredText(p.decode(printBytes, lineEnding), lineEnding, awaitingMore > 0)
 			p.readyBytes.Reset()
 			awaitingMore = 0
 			continue
@@ -206,13 +218,13 @@ func (p *TelnetPrinter) WaitForExit() error {
 	return err
 }
 
-func (p *TelnetPrinter) decode(textBytes []byte, completeLine bool) string {
+func (p *TelnetPrinter) decode(textBytes []byte, ending LineEnding) string {
 	text, err := p.charset.Decode(textBytes)
 	if err != nil {
 		p.eventPump.EncounteredError(err)
 	}
 
-	if !completeLine {
+	if ending == LineEndingNone {
 		text = strings.TrimSuffix(text, "\ufffd")
 	}
 

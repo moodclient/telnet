@@ -61,4 +61,6 @@ type TerminalConfig struct {
 	// TelOpts indicates which TelOpts the terminal should request from the remote, and which the remote
 	// should be permitted to request from us.
 	TelOpts []TelnetOption
+
+	EventHooks EventHooks
 }

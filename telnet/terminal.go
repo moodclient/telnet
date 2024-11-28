@@ -2,7 +2,6 @@ package telnet
 
 import (
 	"context"
-	"fmt"
 	"net"
 )
 
@@ -20,6 +19,7 @@ type Terminal struct {
 	keyboard    *TelnetKeyboard
 	printer     *TelnetPrinter
 	telOptStack *telOptStack
+	eventHooks  EventHooks
 }
 
 func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Terminal, error) {
@@ -37,11 +37,12 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 
 	printer := newTelnetPrinter(charset, conn, pump)
 	terminal := &Terminal{
-		conn:     conn,
-		side:     config.Side,
-		charset:  charset,
-		keyboard: keyboard,
-		printer:  printer,
+		conn:       conn,
+		side:       config.Side,
+		charset:    charset,
+		keyboard:   keyboard,
+		printer:    printer,
+		eventHooks: config.EventHooks,
 	}
 
 	terminal.telOptStack, err = newTelOptStack(terminal, config.TelOpts)
@@ -101,7 +102,10 @@ func (t *Terminal) Printer() *TelnetPrinter {
 }
 
 func (t *Terminal) encounteredCommand(c Command) {
-	fmt.Println("COMMAND:", t.telOptStack.CommandString(c))
+	if t.eventHooks.IncomingCommand != nil {
+		t.eventHooks.IncomingCommand(t, c)
+	}
+
 	err := t.telOptStack.ProcessCommand(t, c)
 	if err != nil {
 		t.encounteredError(err)
@@ -109,31 +113,51 @@ func (t *Terminal) encounteredCommand(c Command) {
 }
 
 func (t *Terminal) encounteredError(err error) {
-	fmt.Println(err)
+	if t.eventHooks.EncounteredError != nil {
+		t.eventHooks.EncounteredError(t, err)
+	}
 }
 
-func (t *Terminal) encounteredPrompt(prompt string, overwrite bool) {
-	if overwrite {
-		fmt.Print(string('\r'))
+func (t *Terminal) encounteredText(text string, lineEnding LineEnding, overwrite bool) {
+	if t.eventHooks.IncomingText != nil {
+		t.eventHooks.IncomingText(t, IncomingTextData{
+			Text:              text,
+			LineEnding:        lineEnding,
+			OverwritePrevious: overwrite,
+		})
 	}
-	fmt.Print(prompt)
-}
-
-func (t *Terminal) encounteredText(text string, overwrite bool, complete bool) {
-	if overwrite {
-		// Rewrite line
-		fmt.Print(string('\r'))
-	}
-
-	fmt.Print(text)
 }
 
 func (t *Terminal) sentText(text string) {
-	fmt.Println("SENT:", text)
+	if t.eventHooks.OutboundText != nil {
+		t.eventHooks.OutboundText(t, text)
+	}
 }
 
 func (t *Terminal) sentCommand(c Command) {
-	fmt.Println("OUTBOUND:", t.telOptStack.CommandString(c))
+	if t.eventHooks.OutboundCommand != nil {
+		t.eventHooks.OutboundCommand(t, c)
+	}
+}
+
+func (t *Terminal) teloptStateChange(option TelnetOption, side TelOptSide, oldState TelOptState) {
+	if t.eventHooks.TelOptStateChange != nil {
+		t.eventHooks.TelOptStateChange(t, TelOptStateChangeData{
+			Option:   option,
+			Side:     side,
+			OldState: oldState,
+		})
+	}
+}
+
+func (t *Terminal) RaiseTelOptEvent(data TelOptEventData) {
+	if t.eventHooks.TelOptEvent != nil {
+		t.eventHooks.TelOptEvent(t, data)
+	}
+}
+
+func (t *Terminal) CommandString(c Command) string {
+	return t.telOptStack.CommandString(c)
 }
 
 func (t *Terminal) WaitForExit() error {
