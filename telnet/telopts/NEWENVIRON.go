@@ -25,6 +25,10 @@ const (
 	newenvironUSERVAR
 )
 
+const (
+	NEWENVIRONEventRemoteVars int = iota
+)
+
 type NEWENVIRONConfig struct {
 	WellKnownVarKeys []string
 
@@ -268,7 +272,11 @@ func (o *NEWENVIRONOption) subnegotiateSEND(subnegotiation []byte) {
 	})
 }
 
-func (o *NEWENVIRONOption) subnegotiationLoadValues(subnegotiation []byte) error {
+func (o *NEWENVIRONOption) subnegotiationLoadValues(subnegotiation []byte) ([]string, error) {
+	o.remoteVarsLock.Lock()
+	defer o.remoteVarsLock.Unlock()
+
+	var modifiedKeys []string
 	var index int
 	for index < len(subnegotiation) {
 		nextToken := subnegotiation[index]
@@ -277,9 +285,10 @@ func (o *NEWENVIRONOption) subnegotiationLoadValues(subnegotiation []byte) error
 		if nextToken == newenvironUSERVAR || nextToken == newenvironVAR {
 			keySize, key := o.decodeText(subnegotiation[index:])
 			if keySize == 0 {
-				return fmt.Errorf("new-environ: received 0-sized key with IS/INFO subnegotiation")
+				return nil, fmt.Errorf("new-environ: received 0-sized key with IS/INFO subnegotiation")
 			}
 
+			modifiedKeys = append(modifiedKeys, key)
 			index += keySize
 
 			if index < len(subnegotiation) && subnegotiation[index] == newenvironVALUE {
@@ -301,7 +310,7 @@ func (o *NEWENVIRONOption) subnegotiationLoadValues(subnegotiation []byte) error
 		}
 	}
 
-	return nil
+	return modifiedKeys, nil
 }
 
 func (o *NEWENVIRONOption) Subnegotiate(subnegotiation []byte) error {
@@ -318,10 +327,17 @@ func (o *NEWENVIRONOption) Subnegotiate(subnegotiation []byte) error {
 	}
 
 	if o.RemoteState() == telnet.TelOptActive && (subnegotiation[0] == newenvironIS || subnegotiation[0] == newenvironINFO) {
-		o.remoteVarsLock.Lock()
-		defer o.remoteVarsLock.Unlock()
+		// This method locks remote locks
+		modifiedKeys, err := o.subnegotiationLoadValues(subnegotiation[1:])
+		if err != nil {
+			return err
+		}
 
-		return o.subnegotiationLoadValues(subnegotiation[1:])
+		o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
+			Option:       o,
+			EventType:    NEWENVIRONEventRemoteVars,
+			EventPayload: modifiedKeys,
+		})
 	}
 
 	return fmt.Errorf("new-environ: unknown subnegotiation: %+v", subnegotiation)
@@ -518,4 +534,34 @@ func (o *NEWENVIRONOption) RemoteUserVar(key string) (string, bool) {
 
 	value, hasValue := o.remoteUserVars[key]
 	return value, hasValue
+}
+
+func (o *NEWENVIRONOption) ModifiedKeysFromEvent(event telnet.TelOptEventData) (wellKnownVars []string, userVars []string, err error) {
+	if event.Option != o {
+		return nil, nil, fmt.Errorf("new-environ: received a TelOptEventData for a different option")
+	}
+
+	if event.EventType != NEWENVIRONEventRemoteVars {
+		return nil, nil, fmt.Errorf("new-environ: unexpected event type %d", event.EventType)
+	}
+
+	if event.EventPayload == nil {
+		return
+	}
+
+	keys, isStringSlice := event.EventPayload.([]string)
+	if !isStringSlice {
+		return nil, nil, fmt.Errorf("new-environ: unexpected event payload type %T", event.EventPayload)
+	}
+
+	for _, key := range keys {
+		_, isWellKnown := o.wellKnownVars[key]
+		if isWellKnown {
+			wellKnownVars = append(wellKnownVars, key)
+		} else {
+			userVars = append(userVars, key)
+		}
+	}
+
+	return
 }

@@ -8,6 +8,10 @@ import (
 
 const sendlocation telnet.TelOptCode = 23
 
+const (
+	SENDLOCATIONEventRemoteLocation int = iota
+)
+
 func SENDLOCATION(usage telnet.TelOptUsage, localLocation string) telnet.TelnetOption {
 	option := &SENDLOCATIONOption{
 		BaseTelOpt: NewBaseTelOpt(usage),
@@ -67,6 +71,10 @@ func (o *SENDLOCATIONOption) TransitionRemoteState(newState telnet.TelOptState) 
 func (o *SENDLOCATIONOption) Subnegotiate(subnegotiation []byte) error {
 	if o.RemoteState() == telnet.TelOptActive {
 		o.remoteLocation.Store(string(subnegotiation))
+		o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
+			Option:    o,
+			EventType: SENDLOCATIONEventRemoteLocation,
+		})
 	}
 
 	return fmt.Errorf("send-location: unknown subnegotiation: %+v", subnegotiation)

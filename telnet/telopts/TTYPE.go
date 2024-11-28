@@ -16,6 +16,10 @@ const (
 	ttypeSEND
 )
 
+const (
+	TTYPEEventRemoteTerminals int = iota
+)
+
 func TTYPE(usage telnet.TelOptUsage, localTerminals []string) telnet.TelnetOption {
 	return &TTYPEOption{
 		BaseTelOpt: NewBaseTelOpt(usage),
@@ -130,6 +134,26 @@ func (o *TTYPEOption) SubnegotiationString(subnegotiation []byte) (string, error
 	return "", fmt.Errorf("ttype: unknown subnegotiation: %+v", subnegotiation)
 }
 
+func (o *TTYPEOption) addTerminal(subnegotiation []byte) bool {
+	o.remoteTerminalLock.Lock()
+	defer o.remoteTerminalLock.Unlock()
+
+	var newTerminal string
+	if len(subnegotiation) > 1 {
+		newTerminal = string(subnegotiation[1:])
+	}
+
+	if len(o.remoteTerminals) == 0 || o.remoteTerminals[len(o.remoteTerminals)-1] != newTerminal {
+		// New terminal, so let's ask for another
+		o.remoteTerminals = append(o.remoteTerminals, newTerminal)
+		o.writeRequestSend()
+		return false
+	}
+
+	o.Terminal().Keyboard().ClearLock(ttypeKeyboardLock)
+	return true
+}
+
 func (o *TTYPEOption) Subnegotiate(subnegotiation []byte) error {
 	if len(subnegotiation) < 1 {
 		return errors.New("ttype: received empty subnegotiation")
@@ -141,20 +165,12 @@ func (o *TTYPEOption) Subnegotiate(subnegotiation []byte) error {
 			return nil
 		}
 
-		o.remoteTerminalLock.Lock()
-		defer o.remoteTerminalLock.Unlock()
-
-		var newTerminal string
-		if len(subnegotiation) > 1 {
-			newTerminal = string(subnegotiation[1:])
-		}
-
-		if len(o.remoteTerminals) == 0 || o.remoteTerminals[len(o.remoteTerminals)-1] != newTerminal {
-			// New terminal, so let's ask for another
-			o.remoteTerminals = append(o.remoteTerminals, newTerminal)
-			o.writeRequestSend()
-		} else {
-			o.Terminal().Keyboard().ClearLock(ttypeKeyboardLock)
+		complete := o.addTerminal(subnegotiation)
+		if complete {
+			o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
+				Option:    o,
+				EventType: TTYPEEventRemoteTerminals,
+			})
 		}
 
 		return nil

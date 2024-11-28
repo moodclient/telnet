@@ -23,6 +23,11 @@ const (
 
 const charsetKeyboardLock = "lock.charset"
 
+const (
+	CHARSETEventNegotiatedCharset int = iota
+	CHARSETEventDefaultCharset
+)
+
 type CHARSETConfig struct {
 	PreferredCharsets []string
 	AllowAnyCharset   bool
@@ -187,6 +192,10 @@ func (o *CHARSETOption) subnegotiateREQUEST(subnegotiation []byte) error {
 			// We know the remote can handle UTF-8 so use it as our default charset no matter what happens
 			// this will allow the consumer to ask the terminal whether the remote can handle UTF-8
 			_ = o.Terminal().Charset().PromoteDefaultCharset("US-ASCII", "UTF-8")
+			o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
+				Option:    o,
+				EventType: CHARSETEventDefaultCharset,
+			})
 		}
 
 		if o.isAcceptableCharset(charSetList[i]) {
@@ -215,6 +224,10 @@ func (o *CHARSETOption) subnegotiateREQUEST(subnegotiation []byte) error {
 		o.writeReject()
 		return err
 	}
+	o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
+		Option:    o,
+		EventType: CHARSETEventNegotiatedCharset,
+	})
 
 	// Stop waiting on our local negotiation
 	o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
@@ -253,7 +266,17 @@ func (o *CHARSETOption) subnegotiateACCEPTED(subnegotiation []byte) error {
 	o.bestRemoteEncoding = charSet
 	o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
 
-	return o.Terminal().Charset().SetNegotiatedCharset(charSet)
+	err := o.Terminal().Charset().SetNegotiatedCharset(charSet)
+	if err != nil {
+		return err
+	}
+
+	o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
+		Option:    o,
+		EventType: CHARSETEventNegotiatedCharset,
+	})
+
+	return nil
 }
 
 func (o *CHARSETOption) Subnegotiate(subnegotiation []byte) error {

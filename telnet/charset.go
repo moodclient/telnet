@@ -5,6 +5,7 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/ianaindex"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -24,7 +25,10 @@ type Charset struct {
 	binaryEncode atomic.Bool
 	binaryDecode atomic.Bool
 
+	defaultLock    sync.Mutex
 	defaultCharset currentCharset
+
+	negotiatedLock sync.Mutex
 	negotiated     currentCharset
 }
 
@@ -61,32 +65,58 @@ func (c *Charset) BinaryDecode() bool {
 }
 
 func (c *Charset) NegotiatedCharsetName() string {
+	c.negotiatedLock.Lock()
+	defer c.negotiatedLock.Unlock()
+
 	return c.negotiated.name
 }
 
 func (c *Charset) DefaultCharsetName() string {
+	c.defaultLock.Lock()
+	defer c.defaultLock.Unlock()
+
 	return c.defaultCharset.name
 }
 
 func (c *Charset) EncodingName() string {
 	if c.usage == CharsetUsageAlways || c.binaryEncode.Load() {
+		c.negotiatedLock.Lock()
+		defer c.negotiatedLock.Unlock()
+
 		return c.negotiated.name
 	}
+
+	c.defaultLock.Lock()
+	defer c.defaultLock.Unlock()
+
 	return c.defaultCharset.name
 }
 
 func (c *Charset) DecodingName() string {
 	if c.usage == CharsetUsageAlways || c.binaryDecode.Load() {
+		c.negotiatedLock.Lock()
+		defer c.negotiatedLock.Unlock()
+
 		return c.negotiated.name
 	}
+
+	c.defaultLock.Lock()
+	defer c.defaultLock.Unlock()
 
 	return c.defaultCharset.name
 }
 
 func (c *Charset) Encode(utf8Text string) ([]byte, error) {
 	if c.usage == CharsetUsageAlways || c.binaryEncode.Load() {
+		c.negotiatedLock.Lock()
+		defer c.negotiatedLock.Unlock()
+
 		return c.negotiated.encoder.Bytes([]byte(utf8Text))
 	}
+
+	c.defaultLock.Lock()
+	defer c.defaultLock.Unlock()
+
 	return c.defaultCharset.encoder.Bytes([]byte(utf8Text))
 }
 
@@ -94,8 +124,14 @@ func (c *Charset) Decode(incomingText []byte) (string, error) {
 	var charset currentCharset
 
 	if c.usage == CharsetUsageAlways || c.binaryDecode.Load() {
+		c.negotiatedLock.Lock()
+		defer c.negotiatedLock.Unlock()
+
 		charset = c.negotiated
 	} else {
+		c.defaultLock.Lock()
+		defer c.defaultLock.Unlock()
+
 		charset = c.defaultCharset
 	}
 
@@ -150,6 +186,9 @@ func (c *Charset) buildCharset(codePage string) (currentCharset, error) {
 }
 
 func (c *Charset) PromoteDefaultCharset(oldCodePage string, newCodePage string) error {
+	c.defaultLock.Lock()
+	defer c.defaultLock.Unlock()
+
 	if c.defaultCharset.name != oldCodePage {
 		return nil
 	}
@@ -158,6 +197,9 @@ func (c *Charset) PromoteDefaultCharset(oldCodePage string, newCodePage string) 
 	if err != nil {
 		return err
 	}
+
+	c.negotiatedLock.Lock()
+	defer c.negotiatedLock.Unlock()
 
 	if c.negotiated.name == oldCodePage {
 		c.negotiated = charset
@@ -172,6 +214,9 @@ func (c *Charset) SetNegotiatedCharset(codePage string) error {
 	if err != nil {
 		return err
 	}
+
+	c.negotiatedLock.Lock()
+	defer c.negotiatedLock.Unlock()
 
 	c.negotiated = charset
 	return nil

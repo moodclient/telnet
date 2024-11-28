@@ -1,7 +1,5 @@
 package telnet
 
-import "encoding/json"
-
 type LineEnding int
 
 const (
@@ -32,9 +30,9 @@ type TelOptStateChangeData struct {
 }
 
 type TelOptEventData struct {
-	Option    TelnetOption
-	EventType int
-	EventData json.RawMessage
+	Option       TelnetOption
+	EventType    int
+	EventPayload any
 }
 
 type IncomingTextEvent func(terminal *Terminal, data IncomingTextData)

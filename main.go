@@ -37,6 +37,15 @@ func outboundCommand(t *telnet.Terminal, c telnet.Command) {
 	fmt.Println("OUTBOUND:", t.CommandString(c))
 }
 
+func telOptStateChange(t *telnet.Terminal, e telnet.TelOptStateChangeData) {
+	if e.Side == telnet.TelOptSideLocal {
+		fmt.Println(e.Option, "LOCAL", fmt.Sprintf("%s -> %s", e.OldState, e.Option.LocalState()))
+		return
+	}
+
+	fmt.Println(e.Option, "REMOTE", fmt.Sprintf("%s -> %s", e.OldState, e.Option.RemoteState()))
+}
+
 func main() {
 	addr, err := net.ResolveTCPAddr("tcp", "erionmud.com:1234")
 	if err != nil {
@@ -81,11 +90,12 @@ func main() {
 			telopts.SENDLOCATION(telnet.TelOptAllowLocal, "SOMEWHERE MYSTERIOUS"),
 		},
 		EventHooks: telnet.EventHooks{
-			IncomingCommand:  incomingCommand,
-			IncomingText:     incomingText,
-			OutboundCommand:  outboundCommand,
-			OutboundText:     outboundText,
-			EncounteredError: encounteredError,
+			IncomingCommand:   incomingCommand,
+			IncomingText:      incomingText,
+			OutboundCommand:   outboundCommand,
+			OutboundText:      outboundText,
+			EncounteredError:  encounteredError,
+			TelOptStateChange: telOptStateChange,
 		},
 	})
 	if err != nil {

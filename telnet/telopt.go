@@ -82,6 +82,19 @@ const (
 	TelOptActive
 )
 
+func (s TelOptState) String() string {
+	switch s {
+	case TelOptInactive:
+		return "Inactive"
+	case TelOptRequested:
+		return "Requested"
+	case TelOptActive:
+		return "Active"
+	default:
+		return "Unknown"
+	}
+}
+
 type telOptStack struct {
 	options map[TelOptCode]TelnetOption
 }
