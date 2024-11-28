@@ -29,6 +29,11 @@ func (o *EOROption) String() string {
 }
 
 func (o *EOROption) TransitionLocalState(newState telnet.TelOptState) error {
+	err := o.BaseTelOpt.TransitionLocalState(newState)
+	if err != nil {
+		return err
+	}
+
 	if newState == telnet.TelOptRequested {
 		o.Terminal().Keyboard().SetLock(eorKeyboardLock, telnet.DefaultKeyboardLock)
 		return nil
@@ -46,6 +51,11 @@ func (o *EOROption) TransitionLocalState(newState telnet.TelOptState) error {
 }
 
 func (o *EOROption) TransitionRemoteState(newState telnet.TelOptState) error {
+	err := o.BaseTelOpt.TransitionRemoteState(newState)
+	if err != nil {
+		return err
+	}
+
 	if newState == telnet.TelOptActive {
 		o.Terminal().Printer().SetPromptCommand(telnet.PromptCommandEOR)
 	} else if newState == telnet.TelOptInactive {

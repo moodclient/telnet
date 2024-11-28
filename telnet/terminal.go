@@ -46,11 +46,6 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 
 	terminal.telOptStack = newTelOptStack(terminal, config.TelOpts)
 
-	err = terminal.telOptStack.WriteRequests(terminal)
-	if err != nil {
-		return nil, err
-	}
-
 	// Run the keyboard, printer, and terminal loop until the connection is closed
 	// or the consumer kills the context
 	go func() {
@@ -77,6 +72,11 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 		connCancel()
 		keyboard.WaitForExit()
 	}()
+
+	err = terminal.telOptStack.WriteRequests(terminal)
+	if err != nil {
+		return nil, err
+	}
 
 	return terminal, nil
 }

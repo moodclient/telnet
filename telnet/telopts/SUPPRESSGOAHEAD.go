@@ -29,6 +29,11 @@ func (o *SUPPRESSGOAHEADOption) String() string {
 }
 
 func (o *SUPPRESSGOAHEADOption) TransitionLocalState(newState telnet.TelOptState) error {
+	err := o.BaseTelOpt.TransitionLocalState(newState)
+	if err != nil {
+		return err
+	}
+
 	if newState == telnet.TelOptRequested {
 		o.Terminal().Keyboard().SetLock(suppressgoaheadKeyboardLock, telnet.DefaultKeyboardLock)
 		return nil
@@ -46,6 +51,11 @@ func (o *SUPPRESSGOAHEADOption) TransitionLocalState(newState telnet.TelOptState
 }
 
 func (o *SUPPRESSGOAHEADOption) TransitionRemoteState(newState telnet.TelOptState) error {
+	err := o.BaseTelOpt.TransitionRemoteState(newState)
+	if err != nil {
+		return err
+	}
+
 	if newState == telnet.TelOptActive {
 		o.Terminal().Printer().ClearPromptCommand(telnet.PromptCommandGA)
 	} else if newState == telnet.TelOptInactive {

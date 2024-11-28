@@ -29,6 +29,11 @@ func (o *TRANSMITBINARYOption) String() string {
 }
 
 func (o *TRANSMITBINARYOption) TransitionLocalState(newState telnet.TelOptState) error {
+	err := o.BaseTelOpt.TransitionLocalState(newState)
+	if err != nil {
+		return err
+	}
+
 	if newState == telnet.TelOptRequested {
 		o.Terminal().Keyboard().SetLock(transmitbinaryKeyboardLock, telnet.DefaultKeyboardLock)
 		return nil
@@ -41,6 +46,11 @@ func (o *TRANSMITBINARYOption) TransitionLocalState(newState telnet.TelOptState)
 }
 
 func (o *TRANSMITBINARYOption) TransitionRemoteState(newState telnet.TelOptState) error {
+	err := o.BaseTelOpt.TransitionRemoteState(newState)
+	if err != nil {
+		return err
+	}
+
 	if newState == telnet.TelOptActive {
 		o.Terminal().Charset().BinaryDecode = true
 	} else if newState == telnet.TelOptInactive {
