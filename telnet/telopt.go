@@ -317,7 +317,8 @@ func GetTelOpt[OptionStruct any, T TypedTelnetOption[OptionStruct]](terminal *Te
 
 	typed, ok := option.(T)
 	if !ok {
-		return nil, fmt.Errorf("factory for TelOpt %s did not return type %T- it returned type %T", zero, zero, option)
+		name := T(&zero).String()
+		return nil, fmt.Errorf("TelOpt %s did not return type %T- it returned type %T", name, zero, option)
 	}
 
 	return typed, err
