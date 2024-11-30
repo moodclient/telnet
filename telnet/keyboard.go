@@ -189,11 +189,14 @@ func (k *TelnetKeyboard) WriteCommand(c Command) {
 	}
 }
 
-func (k *TelnetKeyboard) WriteString(str string) error {
+func (k *TelnetKeyboard) WriteString(str string) {
+	if len(str) == 0 {
+		return
+	}
+
 	k.input <- keyboardTransport{
 		text: str,
 	}
-	return nil
 }
 
 func (k *TelnetKeyboard) WaitForExit() {

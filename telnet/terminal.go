@@ -20,13 +20,16 @@ type Terminal struct {
 	printer     *TelnetPrinter
 	telOptStack *telOptStack
 
-	incomingTextHooks      *eventPublisher[IncomingTextData]
-	incomingCommandHooks   *eventPublisher[Command]
-	outboundTextHooks      *eventPublisher[string]
-	outboundCommandHooks   *eventPublisher[Command]
-	encounteredErrorHooks  *eventPublisher[error]
-	telOptStateChangeHooks *eventPublisher[TelOptStateChangeData]
-	telOptEventHooks       *eventPublisher[TelOptEventData]
+	incomingTextHooks      *EventPublisher[IncomingTextData]
+	incomingCommandHooks   *EventPublisher[Command]
+	outboundTextHooks      *EventPublisher[string]
+	outboundCommandHooks   *EventPublisher[Command]
+	encounteredErrorHooks  *EventPublisher[error]
+	telOptStateChangeHooks *EventPublisher[TelOptStateChangeData]
+	telOptEventHooks       *EventPublisher[TelOptEventData]
+
+	remoteSuppressGA bool
+	remoteEcho       bool
 }
 
 func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Terminal, error) {
@@ -50,13 +53,13 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 		keyboard: keyboard,
 		printer:  printer,
 
-		incomingTextHooks:      newPublisher(config.EventHooks.IncomingText),
-		incomingCommandHooks:   newPublisher(config.EventHooks.IncomingCommand),
-		outboundTextHooks:      newPublisher(config.EventHooks.OutboundText),
-		outboundCommandHooks:   newPublisher(config.EventHooks.OutboundCommand),
-		encounteredErrorHooks:  newPublisher(config.EventHooks.EncounteredError),
-		telOptStateChangeHooks: newPublisher(config.EventHooks.TelOptStateChange),
-		telOptEventHooks:       newPublisher(config.EventHooks.TelOptEvent),
+		incomingTextHooks:      NewPublisher(config.EventHooks.IncomingText),
+		incomingCommandHooks:   NewPublisher(config.EventHooks.IncomingCommand),
+		outboundTextHooks:      NewPublisher(config.EventHooks.OutboundText),
+		outboundCommandHooks:   NewPublisher(config.EventHooks.OutboundCommand),
+		encounteredErrorHooks:  NewPublisher(config.EventHooks.EncounteredError),
+		telOptStateChangeHooks: NewPublisher(config.EventHooks.TelOptStateChange),
+		telOptEventHooks:       NewPublisher(config.EventHooks.TelOptEvent),
 	}
 
 	terminal.telOptStack, err = newTelOptStack(terminal, config.TelOpts)
@@ -115,6 +118,10 @@ func (t *Terminal) Printer() *TelnetPrinter {
 	return t.printer
 }
 
+func (t *Terminal) IsCharacterMode() bool {
+	return t.remoteEcho && t.remoteSuppressGA
+}
+
 func (t *Terminal) encounteredCommand(c Command) {
 	t.incomingCommandHooks.Fire(t, c)
 
@@ -145,6 +152,25 @@ func (t *Terminal) sentCommand(c Command) {
 }
 
 func (t *Terminal) teloptStateChange(option TelnetOption, side TelOptSide, oldState TelOptState) {
+
+	// SUPPRESS-GO-AHEAD 3
+	if side == TelOptSideRemote && option.Code() == 3 {
+		if option.RemoteState() == TelOptActive {
+			t.remoteSuppressGA = true
+		} else if option.RemoteState() == TelOptInactive {
+			t.remoteSuppressGA = false
+		}
+	}
+
+	// ECHO 1
+	if side == TelOptSideRemote && option.Code() == 1 {
+		if option.RemoteState() == TelOptActive {
+			t.remoteEcho = true
+		} else if option.RemoteState() == TelOptInactive {
+			t.remoteEcho = true
+		}
+	}
+
 	t.telOptStateChangeHooks.Fire(t, TelOptStateChangeData{
 		Option:   option,
 		Side:     side,
@@ -167,29 +193,29 @@ func (t *Terminal) WaitForExit() error {
 }
 
 func (t *Terminal) RegisterIncomingTextHook(incomingText IncomingTextEvent) {
-	t.incomingTextHooks.Register(eventHook[IncomingTextData](incomingText))
+	t.incomingTextHooks.Register(EventHook[IncomingTextData](incomingText))
 }
 
 func (t *Terminal) RegisterIncomingCommandHook(incomingCommand CommandEvent) {
-	t.incomingCommandHooks.Register(eventHook[Command](incomingCommand))
+	t.incomingCommandHooks.Register(EventHook[Command](incomingCommand))
 }
 
 func (t *Terminal) RegisterOutboundTextHook(outboundText OutboundTextEvent) {
-	t.outboundTextHooks.Register(eventHook[string](outboundText))
+	t.outboundTextHooks.Register(EventHook[string](outboundText))
 }
 
 func (t *Terminal) RegisterOutboundCommandHook(outboundCommand CommandEvent) {
-	t.outboundCommandHooks.Register(eventHook[Command](outboundCommand))
+	t.outboundCommandHooks.Register(EventHook[Command](outboundCommand))
 }
 
 func (t *Terminal) RegisterEncounteredErrorHook(encounteredError ErrorEvent) {
-	t.encounteredErrorHooks.Register(eventHook[error](encounteredError))
+	t.encounteredErrorHooks.Register(EventHook[error](encounteredError))
 }
 
 func (t *Terminal) RegisterTelOptEvent(telOptEvent TelOptEvent) {
-	t.telOptEventHooks.Register(eventHook[TelOptEventData](telOptEvent))
+	t.telOptEventHooks.Register(EventHook[TelOptEventData](telOptEvent))
 }
 
 func (t *Terminal) RegisterTelOptStateChangeEvent(telOptStateChange TelOptStateChangeEvent) {
-	t.telOptStateChangeHooks.Register(eventHook[TelOptStateChangeData](telOptStateChange))
+	t.telOptStateChangeHooks.Register(EventHook[TelOptStateChangeData](telOptStateChange))
 }

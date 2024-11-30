@@ -1,15 +1,19 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"github.com/cannibalvox/moodclient/telnet"
-	"github.com/cannibalvox/moodclient/telnet/telopts"
-	"github.com/charmbracelet/lipgloss/v2"
 	"log"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/cannibalvox/moodclient/telnet"
+	"github.com/cannibalvox/moodclient/telnet/telopts"
+	"github.com/cannibalvox/moodclient/telnet/utils"
+	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/charmbracelet/x/term"
 )
 
 func incomingCommand(t *telnet.Terminal, c telnet.Command) {
@@ -46,6 +50,17 @@ func telOptStateChange(t *telnet.Terminal, e telnet.TelOptStateChangeData) {
 	fmt.Println(e.Option, "REMOTE", fmt.Sprintf("%s -> %s", e.OldState, e.Option.RemoteState()))
 }
 
+func echo(t *telnet.Terminal, echo string) {
+	o, err := telnet.GetTelOpt[telopts.ECHOOption](t)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	if o.RemoteState() != telnet.TelOptActive {
+		fmt.Print(echo)
+	}
+}
+
 func main() {
 	addr, err := net.ResolveTCPAddr("tcp", "erionmud.com:1234")
 	if err != nil {
@@ -57,8 +72,20 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	stdin := os.Stdin
 	lipgloss.EnableLegacyWindowsANSI(os.Stdout)
-	lipgloss.EnableLegacyWindowsANSI(os.Stdin)
+	lipgloss.EnableLegacyWindowsANSI(stdin)
+	state, err := term.MakeRaw(stdin.Fd())
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	defer func() {
+		err := term.Restore(stdin.Fd(), state)
+		if err != nil {
+			log.Println(err)
+		}
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -66,7 +93,7 @@ func main() {
 		_ = conn.Close()
 	}()
 
-	c, err := telnet.NewTerminal(context.Background(), conn, telnet.TerminalConfig{
+	terminal, err := telnet.NewTerminal(context.Background(), conn, telnet.TerminalConfig{
 		Side:               telnet.SideClient,
 		DefaultCharsetName: "US-ASCII",
 		TelOpts: []telnet.TelnetOption{
@@ -84,7 +111,7 @@ func main() {
 			}),
 			telopts.SUPPRESSGOAHEAD(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
 			telopts.NAWS(telnet.TelOptAllowLocal),
-			telopts.NEWENVIRON(telnet.TelOptAllowRemote|telnet.TelOptAllowLocal, telopts.NEWENVIRONConfig{
+			telopts.NEWENVIRON(telnet.TelOptAllowLocal, telopts.NEWENVIRONConfig{
 				WellKnownVarKeys: telopts.NEWENVIRONWellKnownVars,
 			}),
 			telopts.SENDLOCATION(telnet.TelOptAllowLocal, "SOMEWHERE MYSTERIOUS"),
@@ -102,17 +129,25 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		_, err = reader.ReadString('\n')
-		if err != nil {
-			break
-		}
-		break
+	feed, err := utils.NewKeyboardFeed(terminal, stdin, []utils.EchoEvent{echo})
+	if err != nil {
+		log.Fatalln(err)
 	}
 
+	go func() {
+		err := feed.FeedLoop()
+		if err != nil {
+			log.Println(err)
+		}
+	}()
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	<-sigs
+
 	cancel()
-	err = c.WaitForExit()
+	err = terminal.WaitForExit()
 	if err != nil {
 		log.Fatalln(err)
 	}

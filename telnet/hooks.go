@@ -37,34 +37,34 @@ type TelOptEventData struct {
 	EventPayload any
 }
 
-type eventHook[T any] func(terminal *Terminal, data T)
+type EventHook[T any] func(terminal *Terminal, data T)
 
-type eventPublisher[U any] struct {
+type EventPublisher[U any] struct {
 	lock sync.Mutex
 
-	registeredHooks []eventHook[U]
+	registeredHooks []EventHook[U]
 }
 
-func newPublisher[U any, T ~func(terminal *Terminal, data U)](hooks []T) *eventPublisher[U] {
-	var convertedHooks []eventHook[U]
+func NewPublisher[U any, T ~func(terminal *Terminal, data U)](hooks []T) *EventPublisher[U] {
+	var convertedHooks []EventHook[U]
 
 	for _, hook := range hooks {
-		convertedHooks = append(convertedHooks, eventHook[U](hook))
+		convertedHooks = append(convertedHooks, EventHook[U](hook))
 	}
 
-	return &eventPublisher[U]{
+	return &EventPublisher[U]{
 		registeredHooks: convertedHooks,
 	}
 }
 
-func (e *eventPublisher[U]) Register(hook eventHook[U]) {
+func (e *EventPublisher[U]) Register(hook EventHook[U]) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
 	e.registeredHooks = append(e.registeredHooks, hook)
 }
 
-func (e *eventPublisher[U]) Fire(terminal *Terminal, eventData U) {
+func (e *EventPublisher[U]) Fire(terminal *Terminal, eventData U) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
