@@ -47,6 +47,7 @@ type TelnetOption interface {
 	// String should return the short name used to refer to this option. This method is expected to run
 	// successfully with an uninitialized option
 	String() string
+	// Usage indicates the way in which this TelOpt is permitted to be used.
 	Usage() TelOptUsage
 
 	// TransitionLocalState is called when the terminal attempts to change this option to a new state
@@ -65,6 +66,8 @@ type TelnetOption interface {
 	Subnegotiate(subnegotiation []byte) error
 	// SubnegotiationString creates a legible string for a subnegotiation request
 	SubnegotiationString(subnegotiation []byte) (string, error)
+	// EventString creates legible strings for eventdata contents
+	EventString(eventData TelOptEventData) (eventName string, payload string, err error)
 }
 
 type TelOptState byte

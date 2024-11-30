@@ -566,3 +566,18 @@ func (o *NEWENVIRON) ModifiedKeysFromEvent(event telnet.TelOptEventData) (wellKn
 
 	return
 }
+
+func (o *NEWENVIRON) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
+	if eventData.EventType == NEWENVIRONEventRemoteVars {
+		updatedVars, correctType := eventData.EventPayload.([]string)
+		payloadStr := "[]"
+
+		if correctType && len(updatedVars) == 0 {
+			payloadStr = fmt.Sprintf("%+v", updatedVars)
+		}
+
+		return "Updated Vars", payloadStr, nil
+	}
+
+	return "", "", fmt.Errorf("new-environ: unknown event: %+v", eventData)
+}

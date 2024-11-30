@@ -127,3 +127,11 @@ func (o *NAWS) GetRemoteSize() (width, height int) {
 
 	return o.remoteWidth, o.remoteHeight
 }
+
+func (o *NAWS) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
+	if eventData.EventType == NAWSEventRemoteSize {
+		return "Updated Remote Size", "", nil
+	}
+
+	return "", "", fmt.Errorf("naws: unknown event: %+v", eventData)
+}

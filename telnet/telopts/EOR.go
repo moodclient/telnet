@@ -10,24 +10,24 @@ const eorKeyboardLock string = "lock.eor"
 const eor telnet.TelOptCode = 25
 
 func RegisterEOR(usage telnet.TelOptUsage) telnet.TelnetOption {
-	return &EOROption{
+	return &EOR{
 		NewBaseTelOpt(usage),
 	}
 }
 
-type EOROption struct {
+type EOR struct {
 	BaseTelOpt
 }
 
-func (o *EOROption) Code() telnet.TelOptCode {
+func (o *EOR) Code() telnet.TelOptCode {
 	return eor
 }
 
-func (o *EOROption) String() string {
+func (o *EOR) String() string {
 	return "EOR"
 }
 
-func (o *EOROption) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *EOR) TransitionLocalState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -49,7 +49,7 @@ func (o *EOROption) TransitionLocalState(newState telnet.TelOptState) error {
 	return nil
 }
 
-func (o *EOROption) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *EOR) TransitionRemoteState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
 		return err
@@ -64,10 +64,14 @@ func (o *EOROption) TransitionRemoteState(newState telnet.TelOptState) error {
 	return nil
 }
 
-func (o *EOROption) Subnegotiate(subnegotiation []byte) error {
+func (o *EOR) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("eor: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *EOROption) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *EOR) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return "", fmt.Errorf("eor: unknown subnegotiation: %+v", subnegotiation)
+}
+
+func (o *EOR) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
+	return "", "", fmt.Errorf("eor: unknown event: %+v", eventData)
 }

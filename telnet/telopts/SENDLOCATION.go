@@ -98,3 +98,11 @@ func (o *SENDLOCATION) SetLocalLocation(location string) {
 func (o *SENDLOCATION) RemoteLocation() string {
 	return o.remoteLocation.Load().(string)
 }
+
+func (o *SENDLOCATION) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
+	if eventData.EventType == SENDLOCATIONEventRemoteLocation {
+		return "Update Location", "", nil
+	}
+
+	return "", "", fmt.Errorf("send-location: unknown error: %+v", eventData)
+}

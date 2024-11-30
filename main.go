@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -16,10 +18,6 @@ import (
 	"github.com/charmbracelet/x/term"
 )
 
-func incomingCommand(t *telnet.Terminal, c telnet.Command) {
-	fmt.Println("COMMAND:", t.CommandString(c))
-}
-
 func encounteredError(t *telnet.Terminal, err error) {
 	fmt.Println(err)
 }
@@ -31,23 +29,6 @@ func incomingText(t *telnet.Terminal, data telnet.IncomingTextData) {
 	}
 
 	fmt.Print(data.Text)
-}
-
-func outboundText(t *telnet.Terminal, text string) {
-	fmt.Println("SENT:", text)
-}
-
-func outboundCommand(t *telnet.Terminal, c telnet.Command) {
-	fmt.Println("OUTBOUND:", t.CommandString(c))
-}
-
-func telOptStateChange(t *telnet.Terminal, e telnet.TelOptStateChangeData) {
-	if e.Side == telnet.TelOptSideLocal {
-		fmt.Println(e.Option, "LOCAL", fmt.Sprintf("%s -> %s", e.OldState, e.Option.LocalState()))
-		return
-	}
-
-	fmt.Println(e.Option, "REMOTE", fmt.Sprintf("%s -> %s", e.OldState, e.Option.RemoteState()))
 }
 
 func echo(t *telnet.Terminal, echo string) {
@@ -117,12 +98,8 @@ func main() {
 			telopts.RegisterSENDLOCATION(telnet.TelOptAllowLocal, "SOMEWHERE MYSTERIOUS"),
 		},
 		EventHooks: telnet.EventHooks{
-			IncomingCommand:   []telnet.CommandEvent{incomingCommand},
-			IncomingText:      []telnet.IncomingTextEvent{incomingText},
-			OutboundCommand:   []telnet.CommandEvent{outboundCommand},
-			OutboundText:      []telnet.OutboundTextEvent{outboundText},
-			EncounteredError:  []telnet.ErrorEvent{encounteredError},
-			TelOptStateChange: []telnet.TelOptStateChangeEvent{telOptStateChange},
+			IncomingText:     []telnet.IncomingTextEvent{incomingText},
+			EncounteredError: []telnet.ErrorEvent{encounteredError},
 		},
 	})
 	if err != nil {
@@ -141,6 +118,18 @@ func main() {
 		}
 	}()
 
+	logStore := bytes.NewBuffer(nil)
+	logHandler := slog.New(slog.NewTextHandler(logStore, nil))
+	_ = utils.NewDebugLog(terminal, logHandler, utils.DebugLogConfig{
+		EncounteredErrorLevel:  slog.LevelError,
+		IncomingCommandLevel:   slog.LevelInfo,
+		IncomingTextLevel:      utils.LevelNone,
+		OutboundCommandLevel:   slog.LevelInfo,
+		OutboundTextLevel:      utils.LevelNone,
+		TelOptEventLevel:       slog.LevelDebug,
+		TelOptStageChangeLevel: slog.LevelDebug,
+	})
+
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
@@ -151,4 +140,6 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	fmt.Println(logStore.String())
 }

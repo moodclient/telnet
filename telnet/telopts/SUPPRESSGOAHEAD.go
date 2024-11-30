@@ -71,3 +71,7 @@ func (o *SUPPRESSGOAHEAD) Subnegotiate(subnegotiation []byte) error {
 func (o *SUPPRESSGOAHEAD) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return "", fmt.Errorf("suppress-go-ahead: unknown subnegotiation: %+v", subnegotiation)
 }
+
+func (o *SUPPRESSGOAHEAD) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
+	return "", "", fmt.Errorf("suppress-go-ahead: unknown event: %+v", eventData)
+}

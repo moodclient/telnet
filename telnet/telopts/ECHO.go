@@ -38,3 +38,7 @@ func (o *ECHO) Subnegotiate(subnegotiation []byte) error {
 func (o *ECHO) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return "", fmt.Errorf("echo: unknown subnegotiation: %+v", subnegotiation)
 }
+
+func (o *ECHO) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
+	return "", "", fmt.Errorf("echo: unknown event: %+v", eventData)
+}

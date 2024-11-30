@@ -343,3 +343,15 @@ func (o *CHARSET) SubnegotiationString(subnegotiation []byte) (string, error) {
 
 	return "", fmt.Errorf("charset: unexpected subnegotiation %+v", subnegotiation)
 }
+
+func (o *CHARSET) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
+	if eventData.EventType == CHARSETEventDefaultCharset {
+		return "Promote Default Charset", "", nil
+	}
+
+	if eventData.EventType == CHARSETEventNegotiatedCharset {
+		return "Update Negotiated Charset", "", nil
+	}
+
+	return "", "", fmt.Errorf("charset: unexpected event %+v", eventData)
+}

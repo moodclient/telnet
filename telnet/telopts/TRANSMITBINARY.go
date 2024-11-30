@@ -66,3 +66,7 @@ func (o *TRANSMITBINARY) Subnegotiate(subnegotiation []byte) error {
 func (o *TRANSMITBINARY) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return "", fmt.Errorf("transmit-binary: unknown subnegotiation: %+v", subnegotiation)
 }
+
+func (o *TRANSMITBINARY) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
+	return "", "", fmt.Errorf("transmit-binary: unknown event: %+v", eventData)
+}

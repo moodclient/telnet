@@ -11,6 +11,19 @@ const (
 	LineEndingEOR
 )
 
+func (l LineEnding) String() string {
+	switch l {
+	case LineEndingCRLF:
+		return "CRLF"
+	case LineEndingEOR:
+		return "EOR"
+	case LineEndingGA:
+		return "GA"
+	default:
+		return "None"
+	}
+}
+
 type IncomingTextData struct {
 	Text              string
 	LineEnding        LineEnding
@@ -24,6 +37,17 @@ const (
 	TelOptSideLocal
 	TelOptSideRemote
 )
+
+func (s TelOptSide) String() string {
+	switch s {
+	case TelOptSideLocal:
+		return "Local"
+	case TelOptSideRemote:
+		return "Remote"
+	default:
+		return "Unknown"
+	}
+}
 
 type TelOptStateChangeData struct {
 	Option   TelnetOption

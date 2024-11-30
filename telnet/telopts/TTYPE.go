@@ -220,3 +220,11 @@ func (o *TTYPE) GetRemoteTerminals() []string {
 
 	return o.remoteTerminals
 }
+
+func (o *TTYPE) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
+	if eventData.EventType == TTYPEEventRemoteTerminals {
+		return "Update Terminals", "", nil
+	}
+
+	return "", "", fmt.Errorf("ttype: unknown event: %+v", eventData)
+}
