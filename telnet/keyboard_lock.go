@@ -57,7 +57,8 @@ func (l *keyboardLock) newNextExpiry(expiry time.Time) {
 
 	// We're setting an expiry- the timer may still have been live
 	l.locked = true
-	l.timer.Reset(expiry.Sub(time.Now()))
+	l.nextExpiryTime = expiry
+	l.timer.Reset(time.Until(expiry))
 }
 
 func (l *keyboardLock) SetLock(lockName string, duration time.Duration) {
