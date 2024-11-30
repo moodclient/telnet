@@ -2,13 +2,14 @@ package telopts
 
 import (
 	"fmt"
+
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
 const eorKeyboardLock string = "lock.eor"
 const eor telnet.TelOptCode = 25
 
-func EOR(usage telnet.TelOptUsage) telnet.TelnetOption {
+func RegisterEOR(usage telnet.TelOptUsage) telnet.TelnetOption {
 	return &EOROption{
 		NewBaseTelOpt(usage),
 	}

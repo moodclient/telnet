@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/cannibalvox/moodclient/telnet"
 	"golang.org/x/text/encoding/ianaindex"
-	"strings"
 )
 
 const (
@@ -33,20 +34,20 @@ type CHARSETConfig struct {
 	AllowAnyCharset   bool
 }
 
-func CHARSET(usage telnet.TelOptUsage, options CHARSETConfig) telnet.TelnetOption {
+func RegisterCHARSET(usage telnet.TelOptUsage, options CHARSETConfig) telnet.TelnetOption {
 	charsets := make(map[string]struct{})
 	for _, c := range options.PreferredCharsets {
 		charsets[c] = struct{}{}
 	}
 
-	return &CHARSETOption{
+	return &CHARSET{
 		BaseTelOpt:           NewBaseTelOpt(usage),
 		options:              options,
 		localAllowedCharsets: charsets,
 	}
 }
 
-type CHARSETOption struct {
+type CHARSET struct {
 	BaseTelOpt
 
 	options CHARSETConfig
@@ -55,7 +56,7 @@ type CHARSETOption struct {
 	localAllowedCharsets map[string]struct{}
 }
 
-func (o *CHARSETOption) writeRequest(charSets []string) error {
+func (o *CHARSET) writeRequest(charSets []string) error {
 	subnegotiation := bytes.NewBuffer(nil)
 	err := subnegotiation.WriteByte(charsetREQUEST)
 	if err != nil {
@@ -83,7 +84,7 @@ func (o *CHARSETOption) writeRequest(charSets []string) error {
 	return nil
 }
 
-func (o *CHARSETOption) writeAccept(acceptedCharset string) {
+func (o *CHARSET) writeAccept(acceptedCharset string) {
 	subnegotiation := make([]byte, 0, len(acceptedCharset)+1)
 	subnegotiation = append(subnegotiation, charsetACCEPTED)
 	subnegotiation = append(subnegotiation, []byte(acceptedCharset)...)
@@ -95,7 +96,7 @@ func (o *CHARSETOption) writeAccept(acceptedCharset string) {
 	})
 }
 
-func (o *CHARSETOption) writeReject() {
+func (o *CHARSET) writeReject() {
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
 		Option:         charset,
@@ -103,7 +104,7 @@ func (o *CHARSETOption) writeReject() {
 	})
 }
 
-func (o *CHARSETOption) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *CHARSET) TransitionRemoteState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -116,7 +117,7 @@ func (o *CHARSETOption) TransitionRemoteState(newState telnet.TelOptState) error
 	return nil
 }
 
-func (o *CHARSETOption) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *CHARSET) TransitionLocalState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -140,15 +141,15 @@ func (o *CHARSETOption) TransitionLocalState(newState telnet.TelOptState) error 
 	return nil
 }
 
-func (o *CHARSETOption) Code() telnet.TelOptCode {
+func (o *CHARSET) Code() telnet.TelOptCode {
 	return charset
 }
 
-func (o *CHARSETOption) String() string {
+func (o *CHARSET) String() string {
 	return "CHARSET"
 }
 
-func (o *CHARSETOption) isAcceptableCharset(charSet string) bool {
+func (o *CHARSET) isAcceptableCharset(charSet string) bool {
 	// Has to be a valid IANA encoding name
 	_, err := ianaindex.IANA.Encoding(charSet)
 	if err != nil {
@@ -166,7 +167,7 @@ func (o *CHARSETOption) isAcceptableCharset(charSet string) bool {
 	return true
 }
 
-func (o *CHARSETOption) subnegotiateREQUEST(subnegotiation []byte) error {
+func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
 	// Some MUDs don't follow this rule!
 	//if o.RemoteState() != telnet.TelOptActive {
 	//	// Inactive sides shouldn't be sending charset requests
@@ -235,7 +236,7 @@ func (o *CHARSETOption) subnegotiateREQUEST(subnegotiation []byte) error {
 	return nil
 }
 
-func (o *CHARSETOption) subnegotiateREJECTED() error {
+func (o *CHARSET) subnegotiateREJECTED() error {
 	if o.LocalState() != telnet.TelOptActive {
 		// We may have deactivated while the negotiation was ongoing
 		return nil
@@ -252,7 +253,7 @@ func (o *CHARSETOption) subnegotiateREJECTED() error {
 	return nil
 }
 
-func (o *CHARSETOption) subnegotiateACCEPTED(subnegotiation []byte) error {
+func (o *CHARSET) subnegotiateACCEPTED(subnegotiation []byte) error {
 	if o.LocalState() != telnet.TelOptActive {
 		// We may have deactivated while the negotiation was ongoing
 		return nil
@@ -279,7 +280,7 @@ func (o *CHARSETOption) subnegotiateACCEPTED(subnegotiation []byte) error {
 	return nil
 }
 
-func (o *CHARSETOption) Subnegotiate(subnegotiation []byte) error {
+func (o *CHARSET) Subnegotiate(subnegotiation []byte) error {
 	if len(subnegotiation) == 0 {
 		return errors.New("charset: received empty subnegotiation")
 	}
@@ -301,7 +302,7 @@ func (o *CHARSETOption) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("charset: unexpected subnegotiation %+v", subnegotiation)
 }
 
-func (o *CHARSETOption) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *CHARSET) SubnegotiationString(subnegotiation []byte) (string, error) {
 	if len(subnegotiation) == 0 {
 		return "", fmt.Errorf("charset: empty subnegotiation")
 	}

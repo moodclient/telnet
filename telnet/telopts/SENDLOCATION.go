@@ -2,8 +2,9 @@ package telopts
 
 import (
 	"fmt"
-	"github.com/cannibalvox/moodclient/telnet"
 	"sync/atomic"
+
+	"github.com/cannibalvox/moodclient/telnet"
 )
 
 const sendlocation telnet.TelOptCode = 23
@@ -12,8 +13,8 @@ const (
 	SENDLOCATIONEventRemoteLocation int = iota
 )
 
-func SENDLOCATION(usage telnet.TelOptUsage, localLocation string) telnet.TelnetOption {
-	option := &SENDLOCATIONOption{
+func RegisterSENDLOCATION(usage telnet.TelOptUsage, localLocation string) telnet.TelnetOption {
+	option := &SENDLOCATION{
 		BaseTelOpt: NewBaseTelOpt(usage),
 	}
 
@@ -23,22 +24,22 @@ func SENDLOCATION(usage telnet.TelOptUsage, localLocation string) telnet.TelnetO
 	return option
 }
 
-type SENDLOCATIONOption struct {
+type SENDLOCATION struct {
 	BaseTelOpt
 
 	localLocation  atomic.Value
 	remoteLocation atomic.Value
 }
 
-func (o *SENDLOCATIONOption) Code() telnet.TelOptCode {
+func (o *SENDLOCATION) Code() telnet.TelOptCode {
 	return sendlocation
 }
 
-func (o *SENDLOCATIONOption) String() string {
+func (o *SENDLOCATION) String() string {
 	return "SEND-LOCATION"
 }
 
-func (o *SENDLOCATIONOption) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *SENDLOCATION) TransitionLocalState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -55,7 +56,7 @@ func (o *SENDLOCATIONOption) TransitionLocalState(newState telnet.TelOptState) e
 	return nil
 }
 
-func (o *SENDLOCATIONOption) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *SENDLOCATION) TransitionRemoteState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
 		return err
@@ -68,7 +69,7 @@ func (o *SENDLOCATIONOption) TransitionRemoteState(newState telnet.TelOptState) 
 	return nil
 }
 
-func (o *SENDLOCATIONOption) Subnegotiate(subnegotiation []byte) error {
+func (o *SENDLOCATION) Subnegotiate(subnegotiation []byte) error {
 	if o.RemoteState() == telnet.TelOptActive {
 		o.remoteLocation.Store(string(subnegotiation))
 		o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
@@ -80,11 +81,11 @@ func (o *SENDLOCATIONOption) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("send-location: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *SENDLOCATIONOption) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *SENDLOCATION) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return string(subnegotiation), nil
 }
 
-func (o *SENDLOCATIONOption) SetLocalLocation(location string) {
+func (o *SENDLOCATION) SetLocalLocation(location string) {
 	// This could hypothetically break, but probably not?
 	o.localLocation.Store(location)
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
@@ -94,6 +95,6 @@ func (o *SENDLOCATIONOption) SetLocalLocation(location string) {
 	})
 }
 
-func (o *SENDLOCATIONOption) RemoteLocation() string {
+func (o *SENDLOCATION) RemoteLocation() string {
 	return o.remoteLocation.Load().(string)
 }

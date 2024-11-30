@@ -51,7 +51,7 @@ func telOptStateChange(t *telnet.Terminal, e telnet.TelOptStateChangeData) {
 }
 
 func echo(t *telnet.Terminal, echo string) {
-	o, err := telnet.GetTelOpt[telopts.ECHOOption](t)
+	o, err := telnet.GetTelOpt[telopts.ECHO](t)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -97,24 +97,24 @@ func main() {
 		Side:               telnet.SideClient,
 		DefaultCharsetName: "US-ASCII",
 		TelOpts: []telnet.TelnetOption{
-			telopts.CHARSET(telnet.TelOptAllowLocal|telnet.TelOptAllowRemote, telopts.CHARSETConfig{
+			telopts.RegisterCHARSET(telnet.TelOptAllowLocal|telnet.TelOptAllowRemote, telopts.CHARSETConfig{
 				AllowAnyCharset:   true,
 				PreferredCharsets: []string{"UTF-8", "US-ASCII"},
 			}),
-			telopts.TRANSMITBINARY(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
-			telopts.EOR(telnet.TelOptAllowRemote | telnet.TelOptAllowLocal),
-			telopts.ECHO(telnet.TelOptAllowRemote),
-			telopts.TTYPE(telnet.TelOptAllowLocal, []string{
+			telopts.RegisterTRANSMITBINARY(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
+			telopts.RegisterEOR(telnet.TelOptAllowRemote | telnet.TelOptAllowLocal),
+			telopts.RegisterECHO(telnet.TelOptAllowRemote),
+			telopts.RegisterTTYPE(telnet.TelOptAllowLocal, []string{
 				"MOODCLIENT",
 				"XTERM-256COLOR",
 				"MTTS 299",
 			}),
-			telopts.SUPPRESSGOAHEAD(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
-			telopts.NAWS(telnet.TelOptAllowLocal),
-			telopts.NEWENVIRON(telnet.TelOptAllowLocal, telopts.NEWENVIRONConfig{
+			telopts.RegisterSUPPRESSGOAHEAD(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
+			telopts.RegisterNAWS(telnet.TelOptAllowLocal),
+			telopts.RegisterNEWENVIRON(telnet.TelOptAllowLocal, telopts.NEWENVIRONConfig{
 				WellKnownVarKeys: telopts.NEWENVIRONWellKnownVars,
 			}),
-			telopts.SENDLOCATION(telnet.TelOptAllowLocal, "SOMEWHERE MYSTERIOUS"),
+			telopts.RegisterSENDLOCATION(telnet.TelOptAllowLocal, "SOMEWHERE MYSTERIOUS"),
 		},
 		EventHooks: telnet.EventHooks{
 			IncomingCommand:   []telnet.CommandEvent{incomingCommand},

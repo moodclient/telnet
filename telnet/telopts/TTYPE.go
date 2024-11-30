@@ -3,9 +3,10 @@ package telopts
 import (
 	"errors"
 	"fmt"
-	"github.com/cannibalvox/moodclient/telnet"
 	"strings"
 	"sync"
+
+	"github.com/cannibalvox/moodclient/telnet"
 )
 
 const ttype telnet.TelOptCode = 24
@@ -20,15 +21,15 @@ const (
 	TTYPEEventRemoteTerminals int = iota
 )
 
-func TTYPE(usage telnet.TelOptUsage, localTerminals []string) telnet.TelnetOption {
-	return &TTYPEOption{
+func RegisterTTYPE(usage telnet.TelOptUsage, localTerminals []string) telnet.TelnetOption {
+	return &TTYPE{
 		BaseTelOpt: NewBaseTelOpt(usage),
 
 		localTerminals: localTerminals,
 	}
 }
 
-type TTYPEOption struct {
+type TTYPE struct {
 	BaseTelOpt
 
 	localTerminalLock  sync.Mutex
@@ -40,15 +41,15 @@ type TTYPEOption struct {
 	remoteTerminals []string
 }
 
-func (o *TTYPEOption) Code() telnet.TelOptCode {
+func (o *TTYPE) Code() telnet.TelOptCode {
 	return ttype
 }
 
-func (o *TTYPEOption) String() string {
+func (o *TTYPE) String() string {
 	return "TTYPE"
 }
 
-func (o *TTYPEOption) writeRequestSend() {
+func (o *TTYPE) writeRequestSend() {
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode:         telnet.SB,
 		Option:         ttype,
@@ -56,7 +57,7 @@ func (o *TTYPEOption) writeRequestSend() {
 	})
 }
 
-func (o *TTYPEOption) writeTerminal(terminal string) {
+func (o *TTYPE) writeTerminal(terminal string) {
 	terminalBytes := make([]byte, 0, len(terminal)+1)
 	terminalBytes = append(terminalBytes, ttypeIS)
 	terminalBytes = append(terminalBytes, []byte(terminal)...)
@@ -68,7 +69,7 @@ func (o *TTYPEOption) writeTerminal(terminal string) {
 	})
 }
 
-func (o *TTYPEOption) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *TTYPE) TransitionLocalState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -81,7 +82,7 @@ func (o *TTYPEOption) TransitionLocalState(newState telnet.TelOptState) error {
 	return nil
 }
 
-func (o *TTYPEOption) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *TTYPE) TransitionRemoteState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
 		return err
@@ -115,7 +116,7 @@ func (o *TTYPEOption) TransitionRemoteState(newState telnet.TelOptState) error {
 	return nil
 }
 
-func (o *TTYPEOption) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *TTYPE) SubnegotiationString(subnegotiation []byte) (string, error) {
 	if len(subnegotiation) < 1 {
 		return "", errors.New("ttype: received empty subnegotiation")
 	}
@@ -134,7 +135,7 @@ func (o *TTYPEOption) SubnegotiationString(subnegotiation []byte) (string, error
 	return "", fmt.Errorf("ttype: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *TTYPEOption) addTerminal(subnegotiation []byte) bool {
+func (o *TTYPE) addTerminal(subnegotiation []byte) bool {
 	o.remoteTerminalLock.Lock()
 	defer o.remoteTerminalLock.Unlock()
 
@@ -154,7 +155,7 @@ func (o *TTYPEOption) addTerminal(subnegotiation []byte) bool {
 	return true
 }
 
-func (o *TTYPEOption) Subnegotiate(subnegotiation []byte) error {
+func (o *TTYPE) Subnegotiate(subnegotiation []byte) error {
 	if len(subnegotiation) < 1 {
 		return errors.New("ttype: received empty subnegotiation")
 	}
@@ -206,14 +207,14 @@ func (o *TTYPEOption) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("ttype: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *TTYPEOption) SetLocalTerminals(terminals []string) {
+func (o *TTYPE) SetLocalTerminals(terminals []string) {
 	o.localTerminalLock.Lock()
 	defer o.localTerminalLock.Unlock()
 
 	o.localTerminals = terminals
 }
 
-func (o *TTYPEOption) GetRemoteTerminals() []string {
+func (o *TTYPE) GetRemoteTerminals() []string {
 	o.remoteTerminalLock.Lock()
 	defer o.remoteTerminalLock.Unlock()
 

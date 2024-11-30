@@ -3,9 +3,10 @@ package telopts
 import (
 	"bytes"
 	"fmt"
-	"github.com/cannibalvox/moodclient/telnet"
 	"strings"
 	"sync"
+
+	"github.com/cannibalvox/moodclient/telnet"
 )
 
 const newenviron telnet.TelOptCode = 39
@@ -35,8 +36,8 @@ type NEWENVIRONConfig struct {
 	InitialVars map[string]string
 }
 
-func NEWENVIRON(usage telnet.TelOptUsage, config NEWENVIRONConfig) telnet.TelnetOption {
-	option := &NEWENVIRONOption{
+func RegisterNEWENVIRON(usage telnet.TelOptUsage, config NEWENVIRONConfig) telnet.TelnetOption {
+	option := &NEWENVIRON{
 		BaseTelOpt: NewBaseTelOpt(usage),
 
 		wellKnownVars: make(map[string]struct{}),
@@ -65,7 +66,7 @@ func NEWENVIRON(usage telnet.TelOptUsage, config NEWENVIRONConfig) telnet.Telnet
 	return option
 }
 
-type NEWENVIRONOption struct {
+type NEWENVIRON struct {
 	BaseTelOpt
 
 	localVarsLock  sync.Mutex
@@ -79,15 +80,15 @@ type NEWENVIRONOption struct {
 	remoteWellKnownVars map[string]string
 }
 
-func (o *NEWENVIRONOption) Code() telnet.TelOptCode {
+func (o *NEWENVIRON) Code() telnet.TelOptCode {
 	return newenviron
 }
 
-func (o *NEWENVIRONOption) String() string {
+func (o *NEWENVIRON) String() string {
 	return "NEW-ENVIRON"
 }
 
-func (o *NEWENVIRONOption) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *NEWENVIRON) TransitionRemoteState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
 		return err
@@ -116,7 +117,7 @@ func (o *NEWENVIRONOption) TransitionRemoteState(newState telnet.TelOptState) er
 	return nil
 }
 
-func (o *NEWENVIRONOption) encodeText(buffer *bytes.Buffer, text string) {
+func (o *NEWENVIRON) encodeText(buffer *bytes.Buffer, text string) {
 	textBytes := []byte(text)
 
 	for _, b := range textBytes {
@@ -129,7 +130,7 @@ func (o *NEWENVIRONOption) encodeText(buffer *bytes.Buffer, text string) {
 	}
 }
 
-func (o *NEWENVIRONOption) decodeText(buffer []byte) (int, string) {
+func (o *NEWENVIRON) decodeText(buffer []byte) (int, string) {
 	textBytes := bytes.NewBuffer(nil)
 
 	var bufferIndex int
@@ -150,7 +151,7 @@ func (o *NEWENVIRONOption) decodeText(buffer []byte) (int, string) {
 	return bufferIndex, textBytes.String()
 }
 
-func (o *NEWENVIRONOption) writeSendAll() {
+func (o *NEWENVIRON) writeSendAll() {
 	// Try to avoid repeated allocs by estimating the buffer size
 	var estimatedBufferSize int
 	for _, wellKnownVar := range o.localWellKnownVars {
@@ -178,7 +179,7 @@ func (o *NEWENVIRONOption) writeSendAll() {
 	})
 }
 
-func (o *NEWENVIRONOption) writeVarValues(buffer *bytes.Buffer, varKeys map[string]struct{}, userVarKeys map[string]struct{}) {
+func (o *NEWENVIRON) writeVarValues(buffer *bytes.Buffer, varKeys map[string]struct{}, userVarKeys map[string]struct{}) {
 	for key := range varKeys {
 		buffer.WriteByte(newenvironVAR)
 		o.encodeText(buffer, key)
@@ -202,7 +203,7 @@ func (o *NEWENVIRONOption) writeVarValues(buffer *bytes.Buffer, varKeys map[stri
 	}
 }
 
-func (o *NEWENVIRONOption) subnegotiateSEND(subnegotiation []byte) {
+func (o *NEWENVIRON) subnegotiateSEND(subnegotiation []byte) {
 	varKeys := make(map[string]struct{})
 	userVarKeys := make(map[string]struct{})
 
@@ -272,7 +273,7 @@ func (o *NEWENVIRONOption) subnegotiateSEND(subnegotiation []byte) {
 	})
 }
 
-func (o *NEWENVIRONOption) subnegotiationLoadValues(subnegotiation []byte) ([]string, error) {
+func (o *NEWENVIRON) subnegotiationLoadValues(subnegotiation []byte) ([]string, error) {
 	o.remoteVarsLock.Lock()
 	defer o.remoteVarsLock.Unlock()
 
@@ -313,7 +314,7 @@ func (o *NEWENVIRONOption) subnegotiationLoadValues(subnegotiation []byte) ([]st
 	return modifiedKeys, nil
 }
 
-func (o *NEWENVIRONOption) Subnegotiate(subnegotiation []byte) error {
+func (o *NEWENVIRON) Subnegotiate(subnegotiation []byte) error {
 	if len(subnegotiation) == 0 {
 		return fmt.Errorf("new-environ received empty subnegotiation")
 	}
@@ -343,7 +344,7 @@ func (o *NEWENVIRONOption) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("new-environ: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *NEWENVIRONOption) subnegotiationSENDString(sb *strings.Builder, subnegotiation []byte) error {
+func (o *NEWENVIRON) subnegotiationSENDString(sb *strings.Builder, subnegotiation []byte) error {
 	var index int
 	for index < len(subnegotiation) {
 		nextToken := subnegotiation[index]
@@ -370,7 +371,7 @@ func (o *NEWENVIRONOption) subnegotiationSENDString(sb *strings.Builder, subnego
 	return nil
 }
 
-func (o *NEWENVIRONOption) subnegotiationValueString(sb *strings.Builder, subnegotiation []byte) error {
+func (o *NEWENVIRON) subnegotiationValueString(sb *strings.Builder, subnegotiation []byte) error {
 	var index int
 	for index < len(subnegotiation) {
 		nextToken := subnegotiation[index]
@@ -408,7 +409,7 @@ func (o *NEWENVIRONOption) subnegotiationValueString(sb *strings.Builder, subneg
 	return nil
 }
 
-func (o *NEWENVIRONOption) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *NEWENVIRON) SubnegotiationString(subnegotiation []byte) (string, error) {
 	var sb strings.Builder
 
 	if subnegotiation[0] == newenvironSEND {
@@ -441,7 +442,7 @@ func (o *NEWENVIRONOption) SubnegotiationString(subnegotiation []byte) (string, 
 	return "", fmt.Errorf("new-environ: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *NEWENVIRONOption) SetVars(keysAndValues ...string) {
+func (o *NEWENVIRON) SetVars(keysAndValues ...string) {
 	o.localVarsLock.Lock()
 	defer o.localVarsLock.Unlock()
 
@@ -485,7 +486,7 @@ func (o *NEWENVIRONOption) SetVars(keysAndValues ...string) {
 	}
 }
 
-func (o *NEWENVIRONOption) ClearVars(keys ...string) {
+func (o *NEWENVIRON) ClearVars(keys ...string) {
 	o.localVarsLock.Lock()
 	defer o.localVarsLock.Unlock()
 
@@ -520,7 +521,7 @@ func (o *NEWENVIRONOption) ClearVars(keys ...string) {
 	}
 }
 
-func (o *NEWENVIRONOption) RemoteWellKnownVar(key string) (string, bool) {
+func (o *NEWENVIRON) RemoteWellKnownVar(key string) (string, bool) {
 	o.remoteVarsLock.Lock()
 	defer o.remoteVarsLock.Unlock()
 
@@ -528,7 +529,7 @@ func (o *NEWENVIRONOption) RemoteWellKnownVar(key string) (string, bool) {
 	return value, hasValue
 }
 
-func (o *NEWENVIRONOption) RemoteUserVar(key string) (string, bool) {
+func (o *NEWENVIRON) RemoteUserVar(key string) (string, bool) {
 	o.remoteVarsLock.Lock()
 	defer o.remoteVarsLock.Unlock()
 
@@ -536,7 +537,7 @@ func (o *NEWENVIRONOption) RemoteUserVar(key string) (string, bool) {
 	return value, hasValue
 }
 
-func (o *NEWENVIRONOption) ModifiedKeysFromEvent(event telnet.TelOptEventData) (wellKnownVars []string, userVars []string, err error) {
+func (o *NEWENVIRON) ModifiedKeysFromEvent(event telnet.TelOptEventData) (wellKnownVars []string, userVars []string, err error) {
 	if event.Option != o {
 		return nil, nil, fmt.Errorf("new-environ: received a TelOptEventData for a different option")
 	}

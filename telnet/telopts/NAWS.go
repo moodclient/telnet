@@ -2,8 +2,9 @@ package telopts
 
 import (
 	"fmt"
-	"github.com/cannibalvox/moodclient/telnet"
 	"sync"
+
+	"github.com/cannibalvox/moodclient/telnet"
 )
 
 const naws telnet.TelOptCode = 31
@@ -12,13 +13,13 @@ const (
 	NAWSEventRemoteSize int = iota
 )
 
-func NAWS(usage telnet.TelOptUsage) telnet.TelnetOption {
-	return &NAWSOption{
+func RegisterNAWS(usage telnet.TelOptUsage) telnet.TelnetOption {
+	return &NAWS{
 		BaseTelOpt: NewBaseTelOpt(usage),
 	}
 }
 
-type NAWSOption struct {
+type NAWS struct {
 	BaseTelOpt
 
 	localLock  sync.Mutex
@@ -30,15 +31,15 @@ type NAWSOption struct {
 	remoteHeight int
 }
 
-func (o *NAWSOption) Code() telnet.TelOptCode {
+func (o *NAWS) Code() telnet.TelOptCode {
 	return naws
 }
 
-func (o *NAWSOption) String() string {
+func (o *NAWS) String() string {
 	return "NAWS"
 }
 
-func (o *NAWSOption) writeSizeSubnegotiation(width, height int) {
+func (o *NAWS) writeSizeSubnegotiation(width, height int) {
 	o.Terminal().Keyboard().WriteCommand(telnet.Command{
 		OpCode: telnet.SB,
 		Option: naws,
@@ -51,7 +52,7 @@ func (o *NAWSOption) writeSizeSubnegotiation(width, height int) {
 	})
 }
 
-func (o *NAWSOption) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *NAWS) TransitionLocalState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -71,7 +72,7 @@ func (o *NAWSOption) TransitionLocalState(newState telnet.TelOptState) error {
 	return nil
 }
 
-func (o *NAWSOption) storeRemoteSize(width, height int) {
+func (o *NAWS) storeRemoteSize(width, height int) {
 	o.remoteLock.Lock()
 	defer o.remoteLock.Unlock()
 
@@ -79,7 +80,7 @@ func (o *NAWSOption) storeRemoteSize(width, height int) {
 	o.remoteHeight = height
 }
 
-func (o *NAWSOption) Subnegotiate(subnegotiation []byte) error {
+func (o *NAWS) Subnegotiate(subnegotiation []byte) error {
 	if o.RemoteState() != telnet.TelOptActive {
 		return nil
 	}
@@ -100,11 +101,11 @@ func (o *NAWSOption) Subnegotiate(subnegotiation []byte) error {
 	return nil
 }
 
-func (o *NAWSOption) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *NAWS) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return fmt.Sprintf("%+v", subnegotiation), nil
 }
 
-func (o *NAWSOption) SetLocalSize(newWidth, newHeight int) {
+func (o *NAWS) SetLocalSize(newWidth, newHeight int) {
 	o.localLock.Lock()
 	defer o.localLock.Unlock()
 
@@ -120,7 +121,7 @@ func (o *NAWSOption) SetLocalSize(newWidth, newHeight int) {
 	}
 }
 
-func (o *NAWSOption) GetRemoteSize() (width, height int) {
+func (o *NAWS) GetRemoteSize() (width, height int) {
 	o.remoteLock.Lock()
 	defer o.remoteLock.Unlock()
 

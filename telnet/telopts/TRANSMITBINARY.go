@@ -2,31 +2,32 @@ package telopts
 
 import (
 	"fmt"
+
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
 const transmitbinaryKeyboardLock string = "lock.binary"
 const transmitbinary telnet.TelOptCode = 0
 
-func TRANSMITBINARY(usage telnet.TelOptUsage) telnet.TelnetOption {
-	return &TRANSMITBINARYOption{
+func RegisterTRANSMITBINARY(usage telnet.TelOptUsage) telnet.TelnetOption {
+	return &TRANSMITBINARY{
 		NewBaseTelOpt(usage),
 	}
 }
 
-type TRANSMITBINARYOption struct {
+type TRANSMITBINARY struct {
 	BaseTelOpt
 }
 
-func (o *TRANSMITBINARYOption) Code() telnet.TelOptCode {
+func (o *TRANSMITBINARY) Code() telnet.TelOptCode {
 	return transmitbinary
 }
 
-func (o *TRANSMITBINARYOption) String() string {
+func (o *TRANSMITBINARY) String() string {
 	return "TRANSMIT-BINARY"
 }
 
-func (o *TRANSMITBINARYOption) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *TRANSMITBINARY) TransitionLocalState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -43,7 +44,7 @@ func (o *TRANSMITBINARYOption) TransitionLocalState(newState telnet.TelOptState)
 	return nil
 }
 
-func (o *TRANSMITBINARYOption) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *TRANSMITBINARY) TransitionRemoteState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
 		return err
@@ -58,10 +59,10 @@ func (o *TRANSMITBINARYOption) TransitionRemoteState(newState telnet.TelOptState
 	return nil
 }
 
-func (o *TRANSMITBINARYOption) Subnegotiate(subnegotiation []byte) error {
+func (o *TRANSMITBINARY) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("transmit-binary: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *TRANSMITBINARYOption) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *TRANSMITBINARY) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return "", fmt.Errorf("transmit-binary: unknown subnegotiation: %+v", subnegotiation)
 }

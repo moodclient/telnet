@@ -2,31 +2,32 @@ package telopts
 
 import (
 	"fmt"
+
 	"github.com/cannibalvox/moodclient/telnet"
 )
 
 const suppressgoaheadKeyboardLock string = "lock.suppress-go-ahead"
 const suppressgoahead telnet.TelOptCode = 3
 
-func SUPPRESSGOAHEAD(usage telnet.TelOptUsage) telnet.TelnetOption {
-	return &SUPPRESSGOAHEADOption{
+func RegisterSUPPRESSGOAHEAD(usage telnet.TelOptUsage) telnet.TelnetOption {
+	return &SUPPRESSGOAHEAD{
 		NewBaseTelOpt(usage),
 	}
 }
 
-type SUPPRESSGOAHEADOption struct {
+type SUPPRESSGOAHEAD struct {
 	BaseTelOpt
 }
 
-func (o *SUPPRESSGOAHEADOption) Code() telnet.TelOptCode {
+func (o *SUPPRESSGOAHEAD) Code() telnet.TelOptCode {
 	return suppressgoahead
 }
 
-func (o *SUPPRESSGOAHEADOption) String() string {
+func (o *SUPPRESSGOAHEAD) String() string {
 	return "SUPPRESS-GO-AHEAD"
 }
 
-func (o *SUPPRESSGOAHEADOption) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *SUPPRESSGOAHEAD) TransitionLocalState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
 		return err
@@ -48,7 +49,7 @@ func (o *SUPPRESSGOAHEADOption) TransitionLocalState(newState telnet.TelOptState
 	return nil
 }
 
-func (o *SUPPRESSGOAHEADOption) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *SUPPRESSGOAHEAD) TransitionRemoteState(newState telnet.TelOptState) error {
 	err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
 		return err
@@ -63,10 +64,10 @@ func (o *SUPPRESSGOAHEADOption) TransitionRemoteState(newState telnet.TelOptStat
 	return nil
 }
 
-func (o *SUPPRESSGOAHEADOption) Subnegotiate(subnegotiation []byte) error {
+func (o *SUPPRESSGOAHEAD) Subnegotiate(subnegotiation []byte) error {
 	return fmt.Errorf("suppress-go-ahead: unknown subnegotiation: %+v", subnegotiation)
 }
 
-func (o *SUPPRESSGOAHEADOption) SubnegotiationString(subnegotiation []byte) (string, error) {
+func (o *SUPPRESSGOAHEAD) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return "", fmt.Errorf("suppress-go-ahead: unknown subnegotiation: %+v", subnegotiation)
 }
