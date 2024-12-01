@@ -31,7 +31,11 @@ func incomingText(t *telnet.Terminal, data telnet.IncomingTextData) {
 }
 
 func main() {
-	addr, err := net.ResolveTCPAddr("tcp", "erionmud.com:1234")
+	if len(os.Args) != 2 {
+		log.Fatalln("syntax: mudclient <host>:<port>")
+	}
+
+	addr, err := net.ResolveTCPAddr("tcp", os.Args[1])
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -48,12 +52,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go func() {
-		<-ctx.Done()
-		_ = conn.Close()
-	}()
-
-	terminal, err := telnet.NewTerminal(context.Background(), conn, telnet.TerminalConfig{
+	terminal, err := telnet.NewTerminal(ctx, conn, telnet.TerminalConfig{
 		Side:               telnet.SideClient,
 		DefaultCharsetName: "US-ASCII",
 		TelOpts: []telnet.TelnetOption{
