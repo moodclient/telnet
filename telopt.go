@@ -6,49 +6,63 @@ import (
 	"strings"
 )
 
+// TelOptUsage indicates how a particular TelnetOption is supposed to be used by the
+// terminal.  Whether it is permitted to be activated locally or on the remote, and
+// whether we should request activation locally or on the remote when the Terminal launches.
 type TelOptUsage byte
 
 // There's no situation where we'd want to request usage of a telopt but not allow the remote to
 // propose it, so the TelOptRequestRemote/Local exposed to consumers includes both flags
 
 const (
+	// TelOptAllowRemote - if the remote requests to activate this telopt on their side,
+	// we will permit it
 	TelOptAllowRemote TelOptUsage = 1 << iota
 	telOptOnlyRequestRemote
+	// TelOptAllowLocal - if the remote requests that we activate this telopt on our side,
+	// we will comply
 	TelOptAllowLocal
 	telOptOnlyRequestLocal
 )
 
 const (
+	// TelOptRequestRemote - we will request that the remote activate this telopt during
+	// Terminal startup
 	TelOptRequestRemote TelOptUsage = TelOptAllowRemote | telOptOnlyRequestRemote
-	TelOptRequestLocal  TelOptUsage = TelOptAllowLocal | telOptOnlyRequestLocal
+	// TelOptRequestLocal - we will request that the remote allow us to activate this
+	// telopt on our side during Terminal startup
+	TelOptRequestLocal TelOptUsage = TelOptAllowLocal | telOptOnlyRequestLocal
 )
 
+// TelOptCode - each telopt has a unique identification number between 0 and 255
 type TelOptCode byte
 
-type TypedTelnetOption[OptionStruct any] interface {
-	*OptionStruct
-	TelnetOption
-}
-
+// TelnetOption is an object representing a single telopt within the currently-running
+// terminal.  Each terminal has its own version of a telopt for each telopt it supports.
 type TelnetOption interface {
+	// Code returns the code this option should be registered under. This method is expected to run succesfully
+	// before Initialize is called.
+	Code() TelOptCode
+	// String should return the short name used to refer to this option. This method is expected to run
+	// successfully before Initialize is called.
+	String() string
+	// Usage indicates the way in which this TelOpt is permitted to be used. This method
+	// is expected to run successfully before Initialize is called.
+	Usage() TelOptUsage
+
+	// Initialize sets the terminal used by this telopt and performs any other necessary
+	// business before other methods may be called.
 	Initialize(terminal *Terminal)
+	// Terminal returns the current terminal. This method must successfully return nil
+	// before Initialize is called.
 	Terminal() *Terminal
 
 	// LocalState returns the current state of this option locally- receiving a DO command will activate
-	// it and a DONT command will deactivate it
+	// it and a DONT command will deactivate it.
 	LocalState() TelOptState
 	// RemoteState returns the current state of this option in the remote- receiving a WILL command
 	// will activate it and a WONT command will deactivate it
 	RemoteState() TelOptState
-
-	// Code returns the code this option should be registered under. This method is expected to run succesfully
-	// with an uninitialized option
-	Code() TelOptCode
-	// String should return the short name used to refer to this option. This method is expected to run
-	// successfully with an uninitialized option
-	String() string
-	// Usage indicates the way in which this TelOpt is permitted to be used.
-	Usage() TelOptUsage
 
 	// TransitionLocalState is called when the terminal attempts to change this option to a new state
 	// locally.  This is not called when the option is initialized to Inactive at the start of a new
@@ -70,6 +84,7 @@ type TelnetOption interface {
 	EventString(eventData TelOptEventData) (eventName string, payload string, err error)
 }
 
+// TelOptState indicates whether the telopt is currently active, inactive, or other
 type TelOptState byte
 
 const (
@@ -122,7 +137,7 @@ func newTelOptStack(terminal *Terminal, options []TelnetOption) (*telOptStack, e
 }
 
 func (s *telOptStack) rejectNegotiationRequest(terminal *Terminal, c Command) {
-	if c.IsNegotiationRequest() {
+	if c.IsActivateNegotiation() {
 		terminal.Keyboard().WriteCommand(c.Reject())
 	}
 }
@@ -208,7 +223,7 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 	side := TelOptSideRemote
 	transitionFunc := option.TransitionRemoteState
 	allowFlag := TelOptAllowRemote
-	if c.IsRequestForLocal() {
+	if c.IsLocalNegotiation() {
 		oldState = option.LocalState()
 		side = TelOptSideLocal
 		transitionFunc = option.TransitionLocalState
@@ -216,10 +231,10 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 	}
 
 	// They are requesting WONT/DONT
-	if !c.IsNegotiationRequest() && oldState == TelOptInactive {
+	if !c.IsActivateNegotiation() && oldState == TelOptInactive {
 		// already turned off
 		return nil
-	} else if !c.IsNegotiationRequest() {
+	} else if !c.IsActivateNegotiation() {
 		// need to turn it off
 		err := transitionFunc(TelOptInactive)
 		if err != nil {
@@ -307,6 +322,20 @@ func (s *telOptStack) CommandString(c Command) string {
 	return sb.String()
 }
 
+// TypedTelnetOption - this is used as a bit of a hack for GetTelOpt. It allows
+// the generic semantic below to work
+type TypedTelnetOption[OptionStruct any] interface {
+	*OptionStruct
+	TelnetOption
+}
+
+// GetTelOpt retrieves a live telopt from a terminal. It is used like this:
+//
+//	telnet.GetTelOpt[telopts.ECHO](terminal)
+//
+// The above will return a value of type *telopts.ECHO, or nil if ECHO is not a registered
+// telopt.  If there is a telopt of a different type registered under ECHO's code, then the method
+// will return an error.
 func GetTelOpt[OptionStruct any, T TypedTelnetOption[OptionStruct]](terminal *Terminal) (T, error) {
 	var zero OptionStruct
 	var err error

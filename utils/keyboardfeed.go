@@ -29,7 +29,7 @@ func NewKeyboardFeed(terminal *telnet.Terminal, input io.Reader, echoHandlers []
 		input:         input,
 		echoPublisher: telnet.NewPublisher(echoHandlers),
 	}
-	terminal.RegisterTelOptStateChangeEvent(feed.telOptStateChange)
+	terminal.RegisterTelOptStateChangeEventHook(feed.telOptStateChange)
 
 	return feed, nil
 }

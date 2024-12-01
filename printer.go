@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+// TelnetPrinter is a Terminal subsidiary that parses text sent by the remote peer.
+// This object is largely not used by consumers. It has a few methods that are consumed
+// by telopts, but received text is largely handled through the Terminal itself.
 type TelnetPrinter struct {
 	scanner        *bufio.Scanner
 	err            error
@@ -21,7 +24,7 @@ type TelnetPrinter struct {
 	complete       chan error
 	eventPump      *terminalEventPump
 	charset        *Charset
-	promptCommands PromptCommands
+	promptCommands atomicPromptCommands
 }
 
 func newTelnetPrinter(charset *Charset, inputStream io.Reader, eventPump *terminalEventPump) *TelnetPrinter {
@@ -29,13 +32,13 @@ func newTelnetPrinter(charset *Charset, inputStream io.Reader, eventPump *termin
 	scan.Split(ScanTelnet)
 
 	printer := &TelnetPrinter{
-		charset:        charset,
-		scanner:        scan,
-		scanResult:     make(chan bool),
-		complete:       make(chan error, 1),
-		eventPump:      eventPump,
-		promptCommands: PromptCommandGA,
+		charset:    charset,
+		scanner:    scan,
+		scanResult: make(chan bool),
+		complete:   make(chan error, 1),
+		eventPump:  eventPump,
 	}
+	printer.promptCommands.Init()
 
 	return printer
 }
@@ -91,8 +94,9 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context) {
 			continue
 		}
 
-		if (p.command.OpCode == GA && p.promptCommands&PromptCommandGA != 0) ||
-			(p.command.OpCode == EOR && p.promptCommands&PromptCommandEOR != 0) {
+		promptCommands := p.promptCommands.Get()
+		if (p.command.OpCode == GA && promptCommands&PromptCommandGA != 0) ||
+			(p.command.OpCode == EOR && promptCommands&PromptCommandEOR != 0) {
 
 			var lineEnding LineEnding
 			if p.command.OpCode == GA {
@@ -209,6 +213,7 @@ func (p *TelnetPrinter) scan(ctx context.Context) bool {
 	}
 }
 
+// WaitForExit will block until the printer is disposed of
 func (p *TelnetPrinter) WaitForExit() error {
 	err := <-p.complete
 	p.complete <- err
@@ -228,12 +233,18 @@ func (p *TelnetPrinter) decode(textBytes []byte, ending LineEnding) string {
 	return text
 }
 
+// SetPromptCommand will activate a particular prompt command and permit
+// it to be received by the printer.  Prompt commands are IAC GA/IAC EOR, commands
+// that indicate to the consumer where to place a prompt
 func (p *TelnetPrinter) SetPromptCommand(flag PromptCommands) {
-	p.promptCommands |= flag
+	p.promptCommands.SetPromptCommand(flag)
 }
 
+// ClearPromptCommand will deactivate a particular prompt command and cause it
+// to be ignored by the printer. Prompt commands are IAC GA/IAC EOR, commands
+// that indicate to the consumer where to place a prompt
 func (p *TelnetPrinter) ClearPromptCommand(flag PromptCommands) {
-	p.promptCommands &= ^flag
+	p.promptCommands.ClearPromptCommand(flag)
 }
 
 func findNextSpecialChar(data []byte, onlyIAC bool) (int, byte) {

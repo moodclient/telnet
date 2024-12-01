@@ -7,17 +7,35 @@ import (
 	"strings"
 )
 
+// Telnet opcodes
 const (
-	EOR  byte = 239
-	SE   byte = 240
-	NOP  byte = 241
-	GA   byte = 249
-	SB   byte = 250
+	// EOR - End Of Record. The real meaning is implementation-specific, but these
+	// days IAC EOR is primarily used as an alternative to IAC GA that can indicate
+	// where a prompt is without all the historical baggage of GA
+	EOR byte = 239
+	// SE - Subnegotiation End. IAC SE is used to mark the end of a subnegotiation command
+	SE byte = 240
+	// NOP - No-Op. IAC NOP doesn't indicate anything at all, and this library ignores it.
+	NOP byte = 241
+	// GA - Go Ahead. IAC GA is often used to indicate the end of a prompt line, so
+	// that clients know where to place a cursor. However, it was originally used for
+	// half-duplex terminals to indicate that the user could start typing and there is
+	// a lot of weird baggage around "kludge line mode", so it is usually preferable
+	// not to use this if the remote supports the EOR telopt.
+	GA byte = 249
+	// SB - Subnegotiation Begin. IAC SB is used to indicate the beginning of a subnegotiation
+	// command. These are telopt-specific commands that have telopt-specific meanings.
+	SB byte = 250
+	// WILL - IAC WILL is used to indicate that this terminal intends to activate a telopt
 	WILL byte = 251
+	// WONT - IAC WONT is used to indicate that this terminal refuses to activate a telopt
 	WONT byte = 252
-	DO   byte = 253
+	// DO - IAC DO is used to request that the remote terminal activates a telopt
+	DO byte = 253
+	// DONT - IAC DONT is used to demand that the remote terminal do not activate a telopt
 	DONT byte = 254
-	IAC  byte = 255
+	// IAC - This opcode indicates the beginning of a new command
+	IAC byte = 255
 )
 
 var commandCodes = map[byte]string{
@@ -33,17 +51,19 @@ var commandCodes = map[byte]string{
 	IAC:  "IAC",
 }
 
+// Command is a struct that indicates some sort of IAC command either received from
+// or sent to
 type Command struct {
 	OpCode         byte
 	Option         TelOptCode
 	Subnegotiation []byte
 }
 
-func (c Command) IsNegotiationRequest() bool {
+func (c Command) IsActivateNegotiation() bool {
 	return c.OpCode == DO || c.OpCode == WILL
 }
 
-func (c Command) IsRequestForLocal() bool {
+func (c Command) IsLocalNegotiation() bool {
 	return c.OpCode == DO || c.OpCode == DONT
 }
 

@@ -13,6 +13,8 @@ type keyboardTransport struct {
 	command Command
 }
 
+// TelnetKeyboard is a Terminal subsidiary that is in charge of sending outbound data
+// to the remote peer.
 type TelnetKeyboard struct {
 	charset        *Charset
 	outputStream   io.Writer
@@ -20,31 +22,41 @@ type TelnetKeyboard struct {
 	complete       chan bool
 	eventPump      *terminalEventPump
 	lock           *keyboardLock
-	promptCommands PromptCommands
+	promptCommands atomicPromptCommands
 }
 
 func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEventPump) (*TelnetKeyboard, error) {
 	keyboard := &TelnetKeyboard{
-		charset:        charset,
-		outputStream:   output,
-		input:          make(chan keyboardTransport, 10),
-		complete:       make(chan bool, 1),
-		eventPump:      eventPump,
-		lock:           newKeyboardLock(),
-		promptCommands: PromptCommandGA,
+		charset:      charset,
+		outputStream: output,
+		input:        make(chan keyboardTransport, 10),
+		complete:     make(chan bool, 1),
+		eventPump:    eventPump,
+		lock:         newKeyboardLock(),
 	}
+	keyboard.promptCommands.Init()
 
 	return keyboard, nil
 }
 
+// SetLock will buffer all text output without sending until the provided lockName
+// is cleared with ClearLock, or until the provided duration expires. This method
+// is primarily used by telopts to handle changes in communication semantics.  According
+// to the Telnet RFC, communication semantics should change the moment a side sends
+// a command that requests that they change.  Since it is not known at that time whether
+// the remote can receive these semantics, it is recommended that writes are buffered
+// until the remote responds to the request.
 func (k *TelnetKeyboard) SetLock(lockName string, duration time.Duration) {
 	k.lock.SetLock(lockName, duration)
 }
 
+// ClearLock will clear a named lock in order to end buffering (assuming there are no
+// other active locks) and immediately write buffered text.
 func (k *TelnetKeyboard) ClearLock(lockName string) {
 	k.lock.ClearLock(lockName)
 }
 
+// HasActiveLock will indicate whether a named lock is currently active on the keyboard
 func (k *TelnetKeyboard) HasActiveLock(lockName string) bool {
 	return k.lock.HasActiveLock(lockName)
 }
@@ -67,9 +79,10 @@ func (k *TelnetKeyboard) writeOutput(b []byte) error {
 
 func (k *TelnetKeyboard) writeCommand(c Command) error {
 	// Don't send prompt commands that are being suppressed
-	if c.OpCode == GA && k.promptCommands&PromptCommandGA == 0 {
+	promptCommands := k.promptCommands.Get()
+	if c.OpCode == GA && promptCommands&PromptCommandGA == 0 {
 		return nil
-	} else if c.OpCode == EOR && k.promptCommands&PromptCommandEOR == 0 {
+	} else if c.OpCode == EOR && promptCommands&PromptCommandEOR == 0 {
 		return nil
 	}
 
@@ -211,12 +224,14 @@ func (k *TelnetKeyboard) encounteredError(err error) {
 	k.eventPump.EncounteredError(err)
 }
 
+// WriteCommand will queue a command to be sent to the remote
 func (k *TelnetKeyboard) WriteCommand(c Command) {
 	k.input <- keyboardTransport{
 		command: c,
 	}
 }
 
+// WriteString will queue some text to be sent to the remote
 func (k *TelnetKeyboard) WriteString(str string) {
 	if len(str) == 0 {
 		return
@@ -227,15 +242,42 @@ func (k *TelnetKeyboard) WriteString(str string) {
 	}
 }
 
+// WaitForExit will block until the keyboard has been disposed of
 func (k *TelnetKeyboard) WaitForExit() {
 	<-k.complete
 	k.complete <- true
 }
 
+// SetPromptCommand will activate a particular prompt command and permit
+// it to be sent by the keyboard.  Prompt commands are IAC GA/IAC EOR, commands
+// that indicate to the remote where to place a prompt
 func (k *TelnetKeyboard) SetPromptCommand(flag PromptCommands) {
-	k.promptCommands |= flag
+	k.promptCommands.SetPromptCommand(flag)
 }
 
+// ClearPromptCommand will deactivate a particular prompt command and prevent it
+// from being sent by the keyboard. Prompt commands are IAC GA/IAC EOR, commands
+// that indicate to the remote where to place a prompt
 func (k *TelnetKeyboard) ClearPromptCommand(flag PromptCommands) {
-	k.promptCommands &= ^flag
+	k.promptCommands.ClearPromptCommand(flag)
+}
+
+// SendPromptHint will send a IAC GA or IAC EOR if possible, indicating
+// to the remote to place a prompt after the most-recently-sent text.
+//
+// This command will send an EOR if that telopt is active.  Otherwise,
+// it will send a GA if it isn't being suppressed. If it is not valid to
+// send either prompt hint, this method will do nothing.
+func (k *TelnetKeyboard) SendPromptHint() {
+	prompts := k.promptCommands.Get()
+
+	if prompts&PromptCommandEOR != 0 {
+		k.WriteCommand(Command{
+			OpCode: EOR,
+		})
+	} else if prompts&PromptCommandGA != 0 {
+		k.WriteCommand(Command{
+			OpCode: GA,
+		})
+	}
 }

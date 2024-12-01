@@ -1,5 +1,9 @@
 package telnet
 
+// TerminalSide indicates whether this terminal represents a client or server. Technically
+// speaking, telnet is a peer-to-peer protocol, more concerned with "local and remote"
+// than "client and server". Some RFCs (mainly CHARSET) have distinct behavior
+// for clients and server, though.
 type TerminalSide byte
 
 const (
@@ -8,6 +12,11 @@ const (
 	SideServer
 )
 
+// CharsetUsage indicates when charsets negotiated via the CHARSET telopt are used.
+// According to RFC, negotiated telopts are only to be used when TRANSMIT-BINARY is active,
+// but many implementations are incorrect. On the other hand, many implementations don't
+// actually do anything, they just advertise that the server can handle UTF-8, so
+// following the RFC doesn't do any harm.
 type CharsetUsage byte
 
 const (
@@ -62,5 +71,8 @@ type TerminalConfig struct {
 	// should be permitted to request from us.
 	TelOpts []TelnetOption
 
+	// EventHooks is a set of callbacks that the terminal will call when the relevant
+	// event occurs.  You can register additional callbacks after creation with
+	// Terminal.Register* methods.
 	EventHooks EventHooks
 }

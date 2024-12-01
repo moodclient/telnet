@@ -32,8 +32,8 @@ func NewDebugLog(terminal *telnet.Terminal, logger *slog.Logger, config DebugLog
 	terminal.RegisterIncomingTextHook(log.logIncomingText)
 	terminal.RegisterOutboundCommandHook(log.logOutboundCommand)
 	terminal.RegisterOutboundTextHook(log.logOutboundText)
-	terminal.RegisterTelOptEvent(log.logTelOptEvent)
-	terminal.RegisterTelOptStateChangeEvent(log.logTelOptStateChange)
+	terminal.RegisterTelOptEventHook(log.logTelOptEvent)
+	terminal.RegisterTelOptStateChangeEventHook(log.logTelOptStateChange)
 
 	return log
 }

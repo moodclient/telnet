@@ -5,13 +5,42 @@ import (
 	"net"
 )
 
-type PromptCommands byte
-
-const (
-	PromptCommandGA PromptCommands = 1 << iota
-	PromptCommandEOR
-)
-
+// Terminal is a wrapper around a net.Conn to enable telnet communications
+// over the net.Conn.  Telnet's base protocol doesn't distinguish between
+// client and server, so there is only one terminal type for both sides of
+// the connection.  A few telopts have different behavior for the client
+// and server side though, so the terminal is aware of which side it is
+// supposed to be.
+//
+// Telnet functions as a "full duplex" protocol, meaning that it does not
+// operate in a request-response type of semantic that users may be
+// familiar with. Instead, it's best to envision a telnet connection as
+// two asynchronous datastreams- a printer reader that produces
+// text from the remote peer, and a keyboard writer that sends text to
+// the remote peer.
+//
+// Text from the printer is sent to the consumer of the Terminal via the
+// many event hooks that can be registered for.  The IncomingText hook
+// provides individual lines of text.  Output is provided to the printer
+// directly by calling terminal.Keyboard().Send*
+//
+// Telnet has a mechanism for sending and receiving Command objects. Most
+// of these are related to telopt negotiation, which the Terminal handles
+// on your behalf based on the telopt preferences provided at creation time.
+// In order to receive commands from the other side, it's best to register
+// for the TelOptStateChange and TelOptEvent hooks, which provide the
+// results of received commands in a more legible format.  Generally,
+// the user should not write commands unless they really, really know
+// what they're doing. If you want to signal a prompt to the remote with
+// IAC GA, use terminal.Keyboard().SendPromptHint().
+//
+// The user should bear in mind that the terminal runs three (substantive)
+// goroutines: one for the printer, one for the keyboard, and one
+// for the terminal.  The terminal loop interacts with both of the other
+// loops directly. It also directly calls registered hooks, which means that
+// blocking calls made in hook methods will can block functioning of the
+// terminal altogether. It is the responsibility of the consumer to
+// move long-running calls to their own concurrency scheme where necessary.
 type Terminal struct {
 	conn        net.Conn
 	side        TerminalSide
@@ -32,6 +61,15 @@ type Terminal struct {
 	remoteEcho       bool
 }
 
+// NewTerminal initializes a new terminal object and begins reading from
+// the printer and writing to the keyboard. Telopt negotiation begins with the remote
+// immediately when this method is called.
+//
+// The terminal will continue until either the passed context is cancelled, or until
+// the connection is closed.
+//
+// All functioning of this terminal is determined by the properties passed in the TerminalConfig
+// object.  See that type for more information.
 func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Terminal, error) {
 	charset, err := NewCharset(config.DefaultCharsetName, config.CharsetUsage)
 	if err != nil {
@@ -94,6 +132,7 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 		keyboard.WaitForExit()
 	}()
 
+	// Kick off telopt negotiation by writing commands for our requested telopts
 	err = terminal.telOptStack.WriteRequests(terminal)
 	if err != nil {
 		return nil, err
@@ -102,22 +141,41 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 	return terminal, nil
 }
 
+// Side returns a TerminalSide object indicating whether the
+// terminal represents a client or server
 func (t *Terminal) Side() TerminalSide {
 	return t.side
 }
 
+// Charset returns the relevant Charset object for the server, which stores what
+// charset the terminal uses for encoding & decoding by default, what charset has
+// been negotiated for use with TRANSMIT-BINARY, etc.
 func (t *Terminal) Charset() *Charset {
 	return t.charset
 }
 
+// Keyboard returns the object that is used for sending outbound communications
 func (t *Terminal) Keyboard() *TelnetKeyboard {
 	return t.keyboard
 }
 
+// Printer returns the object that is used for receiving inbound communciations
 func (t *Terminal) Printer() *TelnetPrinter {
 	return t.printer
 }
 
+// IsCharacterMode will return true if both the ECHO and SUPPRESS-GO-AHEAD options are
+// enabled.  Technically this is supposed to be the case when NEITHER or BOTH are enabled,
+// as traditionally, "kludge line mode", the line-at-a-time operation you might be familiar
+// with, is supposed to occur when either ECHO or SUPPRESS-GO-AHEAD, but not both, are
+// enabled.  However, MUDs traditionally operate in a line-at-a-time manner and do not
+// usually request SUPPRESS-GO-AHEAD, resulting in a relatively common expectation that
+// kludge line mode is active when neither telopt is active.
+//
+// As a result, in order to allow the broadest support for the most clients possible,
+// it's recommended that you activate both SUPPRESS-GO-AHEAD and EOR when you want to
+// support line-at-a-time mode and activate both SUPPRESS-GO-AHEAD and ECHO when
+// when you want to support character mode.
 func (t *Terminal) IsCharacterMode() bool {
 	return t.remoteEcho && t.remoteSuppressGA
 }
@@ -178,14 +236,24 @@ func (t *Terminal) teloptStateChange(option TelnetOption, side TelOptSide, oldSt
 	})
 }
 
+// RaiseTelOptEvent is called by telopt implementations to inject an event
+// into the terminal event stream. Telopts can use this method to fire arbitrary events
+// that can be interpreted by the consumer.  This is good for event-delivery telopts
+// such as GCMP, but it can also be used for things like NAWS to alert the consumer
+// that basic data has been collected from the remote.
 func (t *Terminal) RaiseTelOptEvent(data TelOptEventData) {
 	t.telOptEventHooks.Fire(t, data)
 }
 
+// CommandString converts a Command object into a legible stream. This can be useful
+// when logging a received command object
 func (t *Terminal) CommandString(c Command) string {
 	return t.telOptStack.CommandString(c)
 }
 
+// WaitForExit will block until the terminal has ceased operation, either due to
+// the context passed to NewTerminal being cancelled, or due to the underlying network
+// connection closing.
 func (t *Terminal) WaitForExit() error {
 	t.keyboard.WaitForExit()
 
@@ -193,30 +261,63 @@ func (t *Terminal) WaitForExit() error {
 	return err
 }
 
+// RegisterIncomingTextHook will register an event to be called when a line of text
+// has been received from the printer.
 func (t *Terminal) RegisterIncomingTextHook(incomingText IncomingTextEvent) {
 	t.incomingTextHooks.Register(EventHook[IncomingTextData](incomingText))
 }
 
+// RegisterIncomingCommandHook will register an event to be called when an IAC
+// command has been received from the printer.  This is useful for debug logging,
+// but in most cases, the consumer will want to use RegisterTelOptEventHook and/or
+// RegisterTelOptStateChangeEventHook in order to receive the outcome of a received
+// command.
 func (t *Terminal) RegisterIncomingCommandHook(incomingCommand CommandEvent) {
 	t.incomingCommandHooks.Register(EventHook[Command](incomingCommand))
 }
 
-func (t *Terminal) RegisterOutboundTextHook(outboundText OutboundTextEvent) {
+// RegisterOutboundTextHook will register an event to be called when a line of text
+// has been sent from the keyboard. This is primarily useful for debug logging.
+func (t *Terminal) RegisterOutboundTextHook(outboundText StringEvent) {
 	t.outboundTextHooks.Register(EventHook[string](outboundText))
 }
 
+// RegisterOutboundCommandHook will register an event to be called when a command
+// has been sent from the keyboard. This is primarily useful for debug logging.
 func (t *Terminal) RegisterOutboundCommandHook(outboundCommand CommandEvent) {
 	t.outboundCommandHooks.Register(EventHook[Command](outboundCommand))
 }
 
+// RegisterEncounteredErrorHook will register an event to be called when an error
+// was encountered by the terminal or one of its subsidiaries. Not all errors will
+// be sent via this hook: just errors that are not returned to the user immediately.
+//
+// If a method call to Terminal or one of its subsidiaries is immediately returned to
+// the user, it will not be delivered via this hook. If an error ends terminal processing
+// immediately, it will not be delivered via this hook, it will be delivered via
+// WaitForExit.
 func (t *Terminal) RegisterEncounteredErrorHook(encounteredError ErrorEvent) {
 	t.encounteredErrorHooks.Register(EventHook[error](encounteredError))
 }
 
-func (t *Terminal) RegisterTelOptEvent(telOptEvent TelOptEvent) {
+// RegisterTelOptEventHook will reigster an event to be called when a telopt delivers
+// an event via RaiseTelOptEvent.
+func (t *Terminal) RegisterTelOptEventHook(telOptEvent TelOptEvent) {
 	t.telOptEventHooks.Register(EventHook[TelOptEventData](telOptEvent))
 }
 
-func (t *Terminal) RegisterTelOptStateChangeEvent(telOptStateChange TelOptStateChangeEvent) {
+// RegisterTelOptStateChangeEventHook will register an event to be called when a telopt's
+// state changes. The possible state are located in TelOptState. All TelOpts registered
+// in NewTerminal begin in the TelOptInactive state. If a telopt has been registered to
+// request functioning, there will be an event call changing the state to TelOptRequested.
+// This event will only be called when the state actually change- an external request
+// to move the telopt to a state it's already in will not trigger this event.
+//
+// Bear in mind that telopts have two states: the local state, indicating whether the telopt
+// is active on our side of the connection, and the remote state, indicating whether
+// the telopt is active on the peer's side of the connection.  Telopts can be active
+// on only one side of the connection, both, or neither.  Different telopts have different
+// expected behaviors.
+func (t *Terminal) RegisterTelOptStateChangeEventHook(telOptStateChange TelOptStateChangeEvent) {
 	t.telOptStateChangeHooks.Register(EventHook[TelOptStateChangeData](telOptStateChange))
 }
