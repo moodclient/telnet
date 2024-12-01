@@ -9,6 +9,7 @@ const (
 	LineEndingCRLF
 	LineEndingGA
 	LineEndingEOR
+	LineEndingOtherCommand
 )
 
 func (l LineEnding) String() string {

@@ -12,7 +12,6 @@ import (
 	"syscall"
 
 	"github.com/charmbracelet/lipgloss/v2"
-	"github.com/charmbracelet/x/term"
 	"github.com/moodclient/telnet"
 	"github.com/moodclient/telnet/telopts"
 	"github.com/moodclient/telnet/utils"
@@ -31,17 +30,6 @@ func incomingText(t *telnet.Terminal, data telnet.IncomingTextData) {
 	fmt.Print(data.Text)
 }
 
-func echo(t *telnet.Terminal, echo string) {
-	o, err := telnet.GetTelOpt[telopts.ECHO](t)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	if o.RemoteState() != telnet.TelOptActive {
-		fmt.Print(echo)
-	}
-}
-
 func main() {
 	addr, err := net.ResolveTCPAddr("tcp", "erionmud.com:1234")
 	if err != nil {
@@ -56,17 +44,6 @@ func main() {
 	stdin := os.Stdin
 	lipgloss.EnableLegacyWindowsANSI(os.Stdout)
 	lipgloss.EnableLegacyWindowsANSI(stdin)
-	state, err := term.MakeRaw(stdin.Fd())
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	defer func() {
-		err := term.Restore(stdin.Fd(), state)
-		if err != nil {
-			log.Println(err)
-		}
-	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -108,7 +85,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	feed, err := utils.NewKeyboardFeed(terminal, stdin, []utils.EchoEvent{echo})
+	feed, err := utils.NewKeyboardFeed(terminal, stdin, nil)
 	if err != nil {
 		log.Fatalln(err)
 	}

@@ -82,6 +82,8 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context) {
 			awaitingMore = 0
 			if lineEnding == LineEndingNone {
 				awaitingMore = len(printBytes)
+			} else {
+				p.readyBytes.Reset()
 			}
 		}
 
@@ -164,19 +166,6 @@ func (p *TelnetPrinter) asyncScan(ctx context.Context) bool {
 
 func (p *TelnetPrinter) scan(ctx context.Context) bool {
 	p.err = nil
-
-	// We served bytes last time, let's get ready to serve bytes again
-	servedBytes := p.readyBytes.Len() > 0
-
-	if !p.awaitingScan {
-		// Don't consume the text we have so far if we previously timed out, wait for more text
-		p.readyBytes.Reset()
-	}
-
-	// We may have finished serving bytes in response to an IAC command, meaning we have a command buffered
-	if servedBytes && p.command.OpCode != 0 {
-		return true
-	}
 	p.command = Command{}
 
 	for {
