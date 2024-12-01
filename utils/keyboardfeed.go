@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/moodclient/telnet/telnet"
+	"github.com/moodclient/telnet"
 )
 
 type KeyboardFeed struct {

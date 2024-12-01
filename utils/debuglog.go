@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/moodclient/telnet/telnet"
+	"github.com/moodclient/telnet"
 )
 
 const LevelNone slog.Level = -8

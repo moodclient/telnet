@@ -3,7 +3,7 @@ package telopts
 import (
 	"fmt"
 
-	"github.com/moodclient/telnet/telnet"
+	"github.com/moodclient/telnet"
 )
 
 const suppressgoaheadKeyboardLock string = "lock.suppress-go-ahead"

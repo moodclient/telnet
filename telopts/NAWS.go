@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/moodclient/telnet/telnet"
+	"github.com/moodclient/telnet"
 )
 
 const naws telnet.TelOptCode = 31

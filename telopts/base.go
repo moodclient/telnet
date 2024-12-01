@@ -3,7 +3,7 @@ package telopts
 import (
 	"sync/atomic"
 
-	"github.com/moodclient/telnet/telnet"
+	"github.com/moodclient/telnet"
 )
 
 type BaseTelOpt struct {

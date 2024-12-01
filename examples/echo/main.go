@@ -13,9 +13,9 @@ import (
 
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/term"
-	"github.com/moodclient/telnet/telnet"
-	"github.com/moodclient/telnet/telnet/telopts"
-	"github.com/moodclient/telnet/telnet/utils"
+	"github.com/moodclient/telnet"
+	"github.com/moodclient/telnet/telopts"
+	"github.com/moodclient/telnet/utils"
 )
 
 func encounteredError(t *telnet.Terminal, err error) {
