@@ -52,21 +52,35 @@ var commandCodes = map[byte]string{
 }
 
 // Command is a struct that indicates some sort of IAC command either received from
-// or sent to
+// or sent to the remote. Any possible command can be represented by this struct.
 type Command struct {
-	OpCode         byte
-	Option         TelOptCode
+	// OpCode is the code that comes after IAC in this command. Bear in mind that
+	// subnegotiations, which come in the form of IAC SB <bytes> IAC SE, are represented
+	// as a single command object with the OpCode of SB. IAC SE is never sent in its
+	// own command.
+	OpCode byte
+	// Option indicates which telopt this command is referring to, if the command has one.
+	// IAC WILL/WONT/DO/DONT/SB are always followed by a byte indicating a telopt.
+	Option TelOptCode
+	// Subnegotiation contains a byte slice containing the bytes, if any, that came
+	// between IAC SB and IAC SE.  For non-SB commands, this slice is empty.
 	Subnegotiation []byte
 }
 
+// IsActivateNegotiation indicates whether this command is a negotiation requesting activation
+// of a telopt (DO/WILL).
 func (c Command) IsActivateNegotiation() bool {
 	return c.OpCode == DO || c.OpCode == WILL
 }
 
+// IsLocalNegotiation indicates whether this command is a negotiation regarding a local
+// telopt received from the remote (DO/DONT)
 func (c Command) IsLocalNegotiation() bool {
 	return c.OpCode == DO || c.OpCode == DONT
 }
 
+// Reject produces a new command rejecting this one (WONT/DONT) if this command is
+// an activate negotiation command (DO/WILL)
 func (c Command) Reject() Command {
 	var newOpCode byte
 	switch c.OpCode {
@@ -81,6 +95,8 @@ func (c Command) Reject() Command {
 	return Command{OpCode: newOpCode, Option: c.Option}
 }
 
+// Accept produces a new command accepting this one (WILL/DO) if this command is
+// an activate negotiation command (DO/WILL)
 func (c Command) Accept() Command {
 	var newOpCode byte
 	switch c.OpCode {
