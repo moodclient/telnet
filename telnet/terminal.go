@@ -189,7 +189,8 @@ func (t *Terminal) CommandString(c Command) string {
 func (t *Terminal) WaitForExit() error {
 	t.keyboard.WaitForExit()
 
-	return t.printer.WaitForExit()
+	err := t.printer.WaitForExit()
+	return err
 }
 
 func (t *Terminal) RegisterIncomingTextHook(incomingText IncomingTextEvent) {

@@ -125,10 +125,6 @@ func (k *TelnetKeyboard) handleError(err error) bool {
 }
 
 func (k *TelnetKeyboard) keyboardLoop(ctx context.Context) {
-	go func() {
-		<-ctx.Done()
-		close(k.input)
-	}()
 	queuedText := make([]string, 0, 10)
 
 keyboardLoop:
@@ -169,6 +165,38 @@ keyboardLoop:
 			}
 
 			queuedText = queuedText[:0]
+		}
+	}
+
+	// Try to flush any remaining text
+	anyWriteFailed := false
+	if len(queuedText) > 0 && k.lock.IsLocked() {
+		for _, text := range queuedText {
+			err := k.writeText(text)
+			if k.handleError(err) {
+				anyWriteFailed = true
+				break
+			}
+		}
+	}
+
+	for !anyWriteFailed {
+		select {
+		case input := <-k.input:
+			var err error
+
+			if input.command.OpCode != 0 {
+				err = k.writeCommand(input.command)
+			} else if !k.lock.IsLocked() {
+				err = k.writeText(input.text)
+			}
+
+			if k.handleError(err) {
+				anyWriteFailed = true
+			}
+		default:
+			// If we get to the end of the channel, we're done
+			anyWriteFailed = true
 		}
 	}
 

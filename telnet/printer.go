@@ -52,16 +52,18 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context) {
 	//
 	// If an incomplete line of text is received, then we will print it immediately, but write over it when we
 	// either receive an IAC command or a newline
-	for ctx.Err() == nil && p.scan() {
+	for ctx.Err() == nil && p.scan(ctx) {
 		if p.err != nil {
 			// Don't worry about temporary errors
 			var netErr net.Error
 			if errors.As(p.err, &netErr) {
-				if netErr.Temporary() {
+				if netErr.Timeout() {
 					continue
 				}
 			}
 
+			break
+		} else if ctx.Err() != nil {
 			break
 		}
 
@@ -129,7 +131,7 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context) {
 // idea is that if we receive a chunk of text without a newline we write it to the client screen but
 // don't consume it from the scanner.  The next iteration, we either get more text (including the text we
 // received previously) and CR and rewrite it, or we get a command (which "bakes in" our changes).
-func (p *TelnetPrinter) asyncScan() bool {
+func (p *TelnetPrinter) asyncScan(ctx context.Context) bool {
 	alreadyAwaitingScan := p.awaitingScan
 
 	if !alreadyAwaitingScan {
@@ -140,21 +142,27 @@ func (p *TelnetPrinter) asyncScan() bool {
 	}
 
 	if alreadyAwaitingScan || p.readyBytes.Len() == 0 {
-		result := <-p.scanResult
-		p.awaitingScan = false
-		return result
+		select {
+		case result := <-p.scanResult:
+			p.awaitingScan = false
+			return result
+		case <-ctx.Done():
+			return true
+		}
 	}
 
 	select {
 	case result := <-p.scanResult:
 		p.awaitingScan = false
 		return result
+	case <-ctx.Done():
+		return true
 	case <-time.After(100 * time.Millisecond):
 		return true
 	}
 }
 
-func (p *TelnetPrinter) scan() bool {
+func (p *TelnetPrinter) scan(ctx context.Context) bool {
 	p.err = nil
 
 	// We served bytes last time, let's get ready to serve bytes again
@@ -172,7 +180,7 @@ func (p *TelnetPrinter) scan() bool {
 	p.command = Command{}
 
 	for {
-		keepGoing := p.asyncScan()
+		keepGoing := p.asyncScan(ctx)
 		if p.awaitingScan {
 			// We're still waiting on scan, meaning we timed out- return what characters we have
 			// to the caller

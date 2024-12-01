@@ -69,6 +69,8 @@ func main() {
 	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	go func() {
 		<-ctx.Done()
 		_ = conn.Close()
@@ -130,12 +132,15 @@ func main() {
 		TelOptStageChangeLevel: slog.LevelDebug,
 	})
 
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	<-sigs
+		<-sigs
 
-	cancel()
+		cancel()
+	}()
+
 	err = terminal.WaitForExit()
 	if err != nil {
 		log.Fatalln(err)
