@@ -1,8 +1,9 @@
 package telopts
 
 import (
-	"github.com/cannibalvox/moodclient/telnet"
 	"sync/atomic"
+
+	"github.com/moodclient/telnet/telnet"
 )
 
 type BaseTelOpt struct {

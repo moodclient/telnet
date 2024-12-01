@@ -1,4 +1,4 @@
-module github.com/cannibalvox/moodclient
+module github.com/moodclient/telnet
 
 go 1.23.0
 

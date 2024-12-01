@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cannibalvox/moodclient/telnet"
+	"github.com/moodclient/telnet/telnet"
 	"golang.org/x/text/encoding/ianaindex"
 )
 

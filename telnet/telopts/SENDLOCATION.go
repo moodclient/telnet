@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/cannibalvox/moodclient/telnet"
+	"github.com/moodclient/telnet/telnet"
 )
 
 const sendlocation telnet.TelOptCode = 23

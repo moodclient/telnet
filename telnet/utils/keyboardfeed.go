@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cannibalvox/moodclient/telnet"
+	"github.com/moodclient/telnet/telnet"
 )
 
 type KeyboardFeed struct {

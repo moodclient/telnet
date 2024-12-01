@@ -3,7 +3,7 @@ package telopts
 import (
 	"fmt"
 
-	"github.com/cannibalvox/moodclient/telnet"
+	"github.com/moodclient/telnet/telnet"
 )
 
 const transmitbinaryKeyboardLock string = "lock.binary"
