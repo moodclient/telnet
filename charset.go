@@ -10,19 +10,19 @@ import (
 	"golang.org/x/text/encoding/ianaindex"
 )
 
-// Coder is an interface that applies to both charset encoders and decoders.
+// coder is an interface that applies to both charset encoders and decoders.
 // The full encoding.Encoder/encoding.Decoder interfaces have different methods,
 // but we only use the ones in this interface and it is useful in some cases to use
 // an encoder as a decoder.
-type Coder interface {
+type coder interface {
 	Bytes(b []byte) ([]byte, error)
 }
 
 type currentCharset struct {
 	name string
 
-	encoder Coder
-	decoder Coder
+	encoder coder
+	decoder coder
 }
 
 // Charset represents the full encoding landscape for this terminal.  Terminals have
@@ -216,7 +216,7 @@ func (c *Charset) buildCharset(codePage string) (currentCharset, error) {
 	}
 
 	encoder := charset.NewEncoder()
-	var decoder Coder
+	var decoder coder
 
 	if strings.ToLower(codePage) == "us-ascii" {
 		// Allow the remote to send us UTF-8 even if we think we're ascii. We'll be good citizens

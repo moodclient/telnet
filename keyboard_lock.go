@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// DefaultKeyboardLock indicates the default time to apply a lock
+// with TelnetKeyboard.SetLock and telopts should use this duration when
+// setting a keyboard lock unless they have a good reason not to.
 const DefaultKeyboardLock = 5 * time.Second
 
 type keyboardLock struct {

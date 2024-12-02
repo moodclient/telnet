@@ -38,7 +38,7 @@ const (
 type TelOptCode byte
 
 // TelnetOption is an object representing a single telopt within the currently-running
-// terminal.  Each terminal has its own version of a telopt for each telopt it supports.
+// terminal.  Each terminal has its own telopt object for each telopt it supports.
 type TelnetOption interface {
 	// Code returns the code this option should be registered under. This method is expected to run succesfully
 	// before Initialize is called.
@@ -76,7 +76,7 @@ type TelnetOption interface {
 	TransitionRemoteState(newState TelOptState) error
 
 	// Subnegotiate is called when a subnegotiation request arrives from the remote party. This will only
-	// be called when the option is active on one side of the connection
+	// be called when the option is active on at least one side of the connection
 	Subnegotiate(subnegotiation []byte) error
 	// SubnegotiationString creates a legible string for a subnegotiation request
 	SubnegotiationString(subnegotiation []byte) (string, error)
@@ -96,7 +96,7 @@ const (
 	// TelOptRequested indicates that this client has sent a request to activate the telopt to the other party
 	// but has not yet heard back
 	TelOptRequested
-	// TelOptActive indicates that the
+	// TelOptActive indicates that the option is currently active
 	TelOptActive
 )
 
@@ -137,8 +137,8 @@ func newTelOptStack(terminal *Terminal, options []TelnetOption) (*telOptStack, e
 }
 
 func (s *telOptStack) rejectNegotiationRequest(terminal *Terminal, c Command) {
-	if c.IsActivateNegotiation() {
-		terminal.Keyboard().WriteCommand(c.Reject())
+	if c.isActivateNegotiation() {
+		terminal.Keyboard().WriteCommand(c.reject())
 	}
 }
 
@@ -223,7 +223,7 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 	side := TelOptSideRemote
 	transitionFunc := option.TransitionRemoteState
 	allowFlag := TelOptAllowRemote
-	if c.IsLocalNegotiation() {
+	if c.isLocalNegotiation() {
 		oldState = option.LocalState()
 		side = TelOptSideLocal
 		transitionFunc = option.TransitionLocalState
@@ -231,10 +231,10 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 	}
 
 	// They are requesting WONT/DONT
-	if !c.IsActivateNegotiation() && oldState == TelOptInactive {
+	if !c.isActivateNegotiation() && oldState == TelOptInactive {
 		// already turned off
 		return nil
-	} else if !c.IsActivateNegotiation() {
+	} else if !c.isActivateNegotiation() {
 		// need to turn it off
 		err := transitionFunc(TelOptInactive)
 		if err != nil {
@@ -261,7 +261,7 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 
 	if oldState == TelOptInactive {
 		// Need to send an accept command
-		terminal.Keyboard().WriteCommand(c.Accept())
+		terminal.Keyboard().WriteCommand(c.accept())
 	}
 
 	err := transitionFunc(TelOptActive)
@@ -323,7 +323,7 @@ func (s *telOptStack) CommandString(c Command) string {
 }
 
 // TypedTelnetOption - this is used as a bit of a hack for GetTelOpt. It allows
-// the generic semantic below to work
+// the generic semantic for that method to work
 type TypedTelnetOption[OptionStruct any] interface {
 	*OptionStruct
 	TelnetOption
@@ -336,6 +336,9 @@ type TypedTelnetOption[OptionStruct any] interface {
 // The above will return a value of type *telopts.ECHO, or nil if ECHO is not a registered
 // telopt.  If there is a telopt of a different type registered under ECHO's code, then the method
 // will return an error.
+//
+// This can be used to update the local state of a telopt, or respond to TelOptEvents by querying
+// the newly-updated remote state of a telopt.
 func GetTelOpt[OptionStruct any, T TypedTelnetOption[OptionStruct]](terminal *Terminal) (T, error) {
 	var zero OptionStruct
 	var err error

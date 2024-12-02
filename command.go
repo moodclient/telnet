@@ -67,21 +67,21 @@ type Command struct {
 	Subnegotiation []byte
 }
 
-// IsActivateNegotiation indicates whether this command is a negotiation requesting activation
+// isActivateNegotiation indicates whether this command is a negotiation requesting activation
 // of a telopt (DO/WILL).
-func (c Command) IsActivateNegotiation() bool {
+func (c Command) isActivateNegotiation() bool {
 	return c.OpCode == DO || c.OpCode == WILL
 }
 
-// IsLocalNegotiation indicates whether this command is a negotiation regarding a local
+// isLocalNegotiation indicates whether this command is a negotiation regarding a local
 // telopt received from the remote (DO/DONT)
-func (c Command) IsLocalNegotiation() bool {
+func (c Command) isLocalNegotiation() bool {
 	return c.OpCode == DO || c.OpCode == DONT
 }
 
-// Reject produces a new command rejecting this one (WONT/DONT) if this command is
+// reject produces a new command rejecting this one (WONT/DONT) if this command is
 // an activate negotiation command (DO/WILL)
-func (c Command) Reject() Command {
+func (c Command) reject() Command {
 	var newOpCode byte
 	switch c.OpCode {
 	case DO:
@@ -95,9 +95,9 @@ func (c Command) Reject() Command {
 	return Command{OpCode: newOpCode, Option: c.Option}
 }
 
-// Accept produces a new command accepting this one (WILL/DO) if this command is
+// accept produces a new command accepting this one (WILL/DO) if this command is
 // an activate negotiation command (DO/WILL)
-func (c Command) Accept() Command {
+func (c Command) accept() Command {
 	var newOpCode byte
 	switch c.OpCode {
 	case DO:

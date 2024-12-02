@@ -38,7 +38,7 @@ import (
 // goroutines: one for the printer, one for the keyboard, and one
 // for the terminal.  The terminal loop interacts with both of the other
 // loops directly. It also directly calls registered hooks, which means that
-// blocking calls made in hook methods will can block functioning of the
+// blocking calls made in hook methods will block functioning of the
 // terminal altogether. It is the responsibility of the consumer to
 // move long-running calls to their own concurrency scheme where necessary.
 type Terminal struct {
@@ -125,11 +125,11 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 		// We use WaitForExit purely to ensure that we don't cancel the terminal loop
 		// context until the keyboard and printer are closed- the consumer will actually
 		// care about the error when they call it but we don't
-		_ = printer.WaitForExit()
+		_ = printer.waitForExit()
 
 		// If the printer closed because the conn died, the keyboard might not notice- cancel explicitly
 		connCancel()
-		keyboard.WaitForExit()
+		keyboard.waitForExit()
 	}()
 
 	// Kick off telopt negotiation by writing commands for our requested telopts
@@ -147,7 +147,7 @@ func (t *Terminal) Side() TerminalSide {
 	return t.side
 }
 
-// Charset returns the relevant Charset object for the server, which stores what
+// Charset returns the relevant Charset object for the terminal, which stores what
 // charset the terminal uses for encoding & decoding by default, what charset has
 // been negotiated for use with TRANSMIT-BINARY, etc.
 func (t *Terminal) Charset() *Charset {
@@ -169,13 +169,16 @@ func (t *Terminal) Printer() *TelnetPrinter {
 // as traditionally, "kludge line mode", the line-at-a-time operation you might be familiar
 // with, is supposed to occur when either ECHO or SUPPRESS-GO-AHEAD, but not both, are
 // enabled.  However, MUDs traditionally operate in a line-at-a-time manner and do not
-// usually request SUPPRESS-GO-AHEAD, resulting in a relatively common expectation that
+// usually request SUPPRESS-GO-AHEAD (instead using IAC GA to indicate the location of
+// a prompt to clients), resulting in a relatively common expectation that
 // kludge line mode is active when neither telopt is active.
 //
 // As a result, in order to allow the broadest support for the most clients possible,
 // it's recommended that you activate both SUPPRESS-GO-AHEAD and EOR when you want to
 // support line-at-a-time mode and activate both SUPPRESS-GO-AHEAD and ECHO when
-// when you want to support character mode.
+// when you want to support character mode. If line-at-a-time is desired and EOR
+// is not available, then leaving SUPPRESS-GO-AHEAD and ECHO both inactive and proceeding
+// with line-at-a-time will generally work.
 func (t *Terminal) IsCharacterMode() bool {
 	return t.remoteEcho && t.remoteSuppressGA
 }
@@ -255,9 +258,9 @@ func (t *Terminal) CommandString(c Command) string {
 // the context passed to NewTerminal being cancelled, or due to the underlying network
 // connection closing.
 func (t *Terminal) WaitForExit() error {
-	t.keyboard.WaitForExit()
+	t.keyboard.waitForExit()
 
-	err := t.printer.WaitForExit()
+	err := t.printer.waitForExit()
 	return err
 }
 
@@ -292,10 +295,10 @@ func (t *Terminal) RegisterOutboundCommandHook(outboundCommand CommandEvent) {
 // was encountered by the terminal or one of its subsidiaries. Not all errors will
 // be sent via this hook: just errors that are not returned to the user immediately.
 //
-// If a method call to Terminal or one of its subsidiaries is immediately returned to
-// the user, it will not be delivered via this hook. If an error ends terminal processing
-// immediately, it will not be delivered via this hook, it will be delivered via
-// WaitForExit.
+// If a method call to Terminal or one of its subsidiaries immediately returns an error
+// to the user, it will not be delivered via this hook. If an error ends terminal
+// processing immediately, it will not be delivered via this hook, it will be delivered
+// via WaitForExit.
 func (t *Terminal) RegisterEncounteredErrorHook(encounteredError ErrorEvent) {
 	t.encounteredErrorHooks.Register(EventHook[error](encounteredError))
 }
@@ -307,10 +310,10 @@ func (t *Terminal) RegisterTelOptEventHook(telOptEvent TelOptEvent) {
 }
 
 // RegisterTelOptStateChangeEventHook will register an event to be called when a telopt's
-// state changes. The possible state are located in TelOptState. All TelOpts registered
+// state changes. The possible states are located in TelOptState. All TelOpts registered
 // in NewTerminal begin in the TelOptInactive state. If a telopt has been registered to
 // request functioning, there will be an event call changing the state to TelOptRequested.
-// This event will only be called when the state actually change- an external request
+// This event will only be called when the state actually changes- an external request
 // to move the telopt to a state it's already in will not trigger this event.
 //
 // Bear in mind that telopts have two states: the local state, indicating whether the telopt

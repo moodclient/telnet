@@ -213,8 +213,8 @@ func (p *TelnetPrinter) scan(ctx context.Context) bool {
 	}
 }
 
-// WaitForExit will block until the printer is disposed of
-func (p *TelnetPrinter) WaitForExit() error {
+// waitForExit will block until the printer is disposed of
+func (p *TelnetPrinter) waitForExit() error {
 	err := <-p.complete
 	p.complete <- err
 	return err
@@ -329,6 +329,8 @@ func scanTelnetWithoutEOF(data []byte) (advance int, token []byte, err error) {
 	}
 }
 
+// ScanTelnet is a method used as the split method for io.Scanner. It will receive
+// chunks of text or commands as individual tokens.
 func ScanTelnet(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if len(data) == 0 {
 		return 0, nil, nil

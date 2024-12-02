@@ -242,8 +242,8 @@ func (k *TelnetKeyboard) WriteString(str string) {
 	}
 }
 
-// WaitForExit will block until the keyboard has been disposed of
-func (k *TelnetKeyboard) WaitForExit() {
+// waitForExit will block until the keyboard has been disposed of
+func (k *TelnetKeyboard) waitForExit() {
 	<-k.complete
 	k.complete <- true
 }
