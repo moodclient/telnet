@@ -41,7 +41,7 @@ func RegisterCHARSET(usage telnet.TelOptUsage, options CHARSETConfig) telnet.Tel
 	}
 
 	return &CHARSET{
-		BaseTelOpt:           NewBaseTelOpt(usage),
+		BaseTelOpt:           NewBaseTelOpt(charset, "CHARSET", usage),
 		options:              options,
 		localAllowedCharsets: charsets,
 	}
@@ -139,14 +139,6 @@ func (o *CHARSET) TransitionLocalState(newState telnet.TelOptState) error {
 	}
 
 	return nil
-}
-
-func (o *CHARSET) Code() telnet.TelOptCode {
-	return charset
-}
-
-func (o *CHARSET) String() string {
-	return "CHARSET"
 }
 
 func (o *CHARSET) isAcceptableCharset(charSet string) bool {
@@ -299,7 +291,7 @@ func (o *CHARSET) Subnegotiate(subnegotiation []byte) error {
 		return o.subnegotiateACCEPTED(subnegotiation)
 	}
 
-	return fmt.Errorf("charset: unexpected subnegotiation %+v", subnegotiation)
+	return o.BaseTelOpt.Subnegotiate(subnegotiation)
 }
 
 func (o *CHARSET) SubnegotiationString(subnegotiation []byte) (string, error) {
@@ -341,7 +333,7 @@ func (o *CHARSET) SubnegotiationString(subnegotiation []byte) (string, error) {
 		return "TTABLE-NAK", nil
 	}
 
-	return "", fmt.Errorf("charset: unexpected subnegotiation %+v", subnegotiation)
+	return o.BaseTelOpt.SubnegotiationString(subnegotiation)
 }
 
 func (o *CHARSET) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
@@ -353,5 +345,5 @@ func (o *CHARSET) EventString(eventData telnet.TelOptEventData) (eventName strin
 		return "Update Negotiated Charset", "", nil
 	}
 
-	return "", "", fmt.Errorf("charset: unexpected event %+v", eventData)
+	return o.BaseTelOpt.EventString(eventData)
 }

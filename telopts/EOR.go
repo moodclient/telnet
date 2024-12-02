@@ -1,8 +1,6 @@
 package telopts
 
 import (
-	"fmt"
-
 	"github.com/moodclient/telnet"
 )
 
@@ -11,20 +9,12 @@ const eor telnet.TelOptCode = 25
 
 func RegisterEOR(usage telnet.TelOptUsage) telnet.TelnetOption {
 	return &EOR{
-		NewBaseTelOpt(usage),
+		NewBaseTelOpt(eor, "EOR", usage),
 	}
 }
 
 type EOR struct {
 	BaseTelOpt
-}
-
-func (o *EOR) Code() telnet.TelOptCode {
-	return eor
-}
-
-func (o *EOR) String() string {
-	return "EOR"
 }
 
 func (o *EOR) TransitionLocalState(newState telnet.TelOptState) error {
@@ -62,16 +52,4 @@ func (o *EOR) TransitionRemoteState(newState telnet.TelOptState) error {
 	}
 
 	return nil
-}
-
-func (o *EOR) Subnegotiate(subnegotiation []byte) error {
-	return fmt.Errorf("eor: unknown subnegotiation: %+v", subnegotiation)
-}
-
-func (o *EOR) SubnegotiationString(subnegotiation []byte) (string, error) {
-	return "", fmt.Errorf("eor: unknown subnegotiation: %+v", subnegotiation)
-}
-
-func (o *EOR) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
-	return "", "", fmt.Errorf("eor: unknown event: %+v", eventData)
 }

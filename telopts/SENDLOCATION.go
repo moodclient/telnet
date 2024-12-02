@@ -1,7 +1,6 @@
 package telopts
 
 import (
-	"fmt"
 	"sync/atomic"
 
 	"github.com/moodclient/telnet"
@@ -15,7 +14,7 @@ const (
 
 func RegisterSENDLOCATION(usage telnet.TelOptUsage, localLocation string) telnet.TelnetOption {
 	option := &SENDLOCATION{
-		BaseTelOpt: NewBaseTelOpt(usage),
+		BaseTelOpt: NewBaseTelOpt(sendlocation, "SEND-LOCATION", usage),
 	}
 
 	option.remoteLocation.Store("")
@@ -29,14 +28,6 @@ type SENDLOCATION struct {
 
 	localLocation  atomic.Value
 	remoteLocation atomic.Value
-}
-
-func (o *SENDLOCATION) Code() telnet.TelOptCode {
-	return sendlocation
-}
-
-func (o *SENDLOCATION) String() string {
-	return "SEND-LOCATION"
 }
 
 func (o *SENDLOCATION) TransitionLocalState(newState telnet.TelOptState) error {
@@ -78,7 +69,7 @@ func (o *SENDLOCATION) Subnegotiate(subnegotiation []byte) error {
 		})
 	}
 
-	return fmt.Errorf("send-location: unknown subnegotiation: %+v", subnegotiation)
+	return o.BaseTelOpt.Subnegotiate(subnegotiation)
 }
 
 func (o *SENDLOCATION) SubnegotiationString(subnegotiation []byte) (string, error) {
@@ -104,5 +95,5 @@ func (o *SENDLOCATION) EventString(eventData telnet.TelOptEventData) (eventName 
 		return "Update Location", "", nil
 	}
 
-	return "", "", fmt.Errorf("send-location: unknown error: %+v", eventData)
+	return o.BaseTelOpt.EventString(eventData)
 }

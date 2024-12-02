@@ -15,7 +15,7 @@ const (
 
 func RegisterNAWS(usage telnet.TelOptUsage) telnet.TelnetOption {
 	return &NAWS{
-		BaseTelOpt: NewBaseTelOpt(usage),
+		BaseTelOpt: NewBaseTelOpt(naws, "NAWS", usage),
 	}
 }
 
@@ -29,14 +29,6 @@ type NAWS struct {
 	localHeight  int
 	remoteWidth  int
 	remoteHeight int
-}
-
-func (o *NAWS) Code() telnet.TelOptCode {
-	return naws
-}
-
-func (o *NAWS) String() string {
-	return "NAWS"
 }
 
 func (o *NAWS) writeSizeSubnegotiation(width, height int) {
@@ -133,5 +125,5 @@ func (o *NAWS) EventString(eventData telnet.TelOptEventData) (eventName string, 
 		return "Updated Remote Size", "", nil
 	}
 
-	return "", "", fmt.Errorf("naws: unknown event: %+v", eventData)
+	return o.BaseTelOpt.EventString(eventData)
 }

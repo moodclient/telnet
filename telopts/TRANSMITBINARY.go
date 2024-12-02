@@ -1,8 +1,6 @@
 package telopts
 
 import (
-	"fmt"
-
 	"github.com/moodclient/telnet"
 )
 
@@ -11,20 +9,12 @@ const transmitbinary telnet.TelOptCode = 0
 
 func RegisterTRANSMITBINARY(usage telnet.TelOptUsage) telnet.TelnetOption {
 	return &TRANSMITBINARY{
-		NewBaseTelOpt(usage),
+		NewBaseTelOpt(transmitbinary, "TRANSMIT-BINARY", usage),
 	}
 }
 
 type TRANSMITBINARY struct {
 	BaseTelOpt
-}
-
-func (o *TRANSMITBINARY) Code() telnet.TelOptCode {
-	return transmitbinary
-}
-
-func (o *TRANSMITBINARY) String() string {
-	return "TRANSMIT-BINARY"
 }
 
 func (o *TRANSMITBINARY) TransitionLocalState(newState telnet.TelOptState) error {
@@ -57,16 +47,4 @@ func (o *TRANSMITBINARY) TransitionRemoteState(newState telnet.TelOptState) erro
 	}
 
 	return nil
-}
-
-func (o *TRANSMITBINARY) Subnegotiate(subnegotiation []byte) error {
-	return fmt.Errorf("transmit-binary: unknown subnegotiation: %+v", subnegotiation)
-}
-
-func (o *TRANSMITBINARY) SubnegotiationString(subnegotiation []byte) (string, error) {
-	return "", fmt.Errorf("transmit-binary: unknown subnegotiation: %+v", subnegotiation)
-}
-
-func (o *TRANSMITBINARY) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
-	return "", "", fmt.Errorf("transmit-binary: unknown event: %+v", eventData)
 }

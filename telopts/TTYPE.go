@@ -2,7 +2,6 @@ package telopts
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -23,7 +22,7 @@ const (
 
 func RegisterTTYPE(usage telnet.TelOptUsage, localTerminals []string) telnet.TelnetOption {
 	return &TTYPE{
-		BaseTelOpt: NewBaseTelOpt(usage),
+		BaseTelOpt: NewBaseTelOpt(ttype, "TTYPE", usage),
 
 		localTerminals: localTerminals,
 	}
@@ -39,14 +38,6 @@ type TTYPE struct {
 	localTerminals      []string
 
 	remoteTerminals []string
-}
-
-func (o *TTYPE) Code() telnet.TelOptCode {
-	return ttype
-}
-
-func (o *TTYPE) String() string {
-	return "TTYPE"
 }
 
 func (o *TTYPE) writeRequestSend() {
@@ -132,7 +123,7 @@ func (o *TTYPE) SubnegotiationString(subnegotiation []byte) (string, error) {
 		return "SEND", nil
 	}
 
-	return "", fmt.Errorf("ttype: unknown subnegotiation: %+v", subnegotiation)
+	return o.BaseTelOpt.SubnegotiationString(subnegotiation)
 }
 
 func (o *TTYPE) addTerminal(subnegotiation []byte) bool {
@@ -204,7 +195,7 @@ func (o *TTYPE) Subnegotiate(subnegotiation []byte) error {
 		return nil
 	}
 
-	return fmt.Errorf("ttype: unknown subnegotiation: %+v", subnegotiation)
+	return o.BaseTelOpt.Subnegotiate(subnegotiation)
 }
 
 func (o *TTYPE) SetLocalTerminals(terminals []string) {
@@ -226,5 +217,5 @@ func (o *TTYPE) EventString(eventData telnet.TelOptEventData) (eventName string,
 		return "Update Terminals", "", nil
 	}
 
-	return "", "", fmt.Errorf("ttype: unknown event: %+v", eventData)
+	return o.BaseTelOpt.EventString(eventData)
 }

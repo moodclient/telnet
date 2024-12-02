@@ -38,7 +38,7 @@ type NEWENVIRONConfig struct {
 
 func RegisterNEWENVIRON(usage telnet.TelOptUsage, config NEWENVIRONConfig) telnet.TelnetOption {
 	option := &NEWENVIRON{
-		BaseTelOpt: NewBaseTelOpt(usage),
+		BaseTelOpt: NewBaseTelOpt(newenviron, "NEW-ENVIRON", usage),
 
 		wellKnownVars: make(map[string]struct{}),
 
@@ -78,14 +78,6 @@ type NEWENVIRON struct {
 	localWellKnownVars  map[string]string
 	remoteUserVars      map[string]string
 	remoteWellKnownVars map[string]string
-}
-
-func (o *NEWENVIRON) Code() telnet.TelOptCode {
-	return newenviron
-}
-
-func (o *NEWENVIRON) String() string {
-	return "NEW-ENVIRON"
 }
 
 func (o *NEWENVIRON) TransitionRemoteState(newState telnet.TelOptState) error {
@@ -341,7 +333,7 @@ func (o *NEWENVIRON) Subnegotiate(subnegotiation []byte) error {
 		})
 	}
 
-	return fmt.Errorf("new-environ: unknown subnegotiation: %+v", subnegotiation)
+	return o.BaseTelOpt.Subnegotiate(subnegotiation)
 }
 
 func (o *NEWENVIRON) subnegotiationSENDString(sb *strings.Builder, subnegotiation []byte) error {
@@ -439,7 +431,7 @@ func (o *NEWENVIRON) SubnegotiationString(subnegotiation []byte) (string, error)
 		return str[:len(str)-1], nil
 	}
 
-	return "", fmt.Errorf("new-environ: unknown subnegotiation: %+v", subnegotiation)
+	return o.BaseTelOpt.SubnegotiationString(subnegotiation)
 }
 
 func (o *NEWENVIRON) SetVars(keysAndValues ...string) {
@@ -579,5 +571,5 @@ func (o *NEWENVIRON) EventString(eventData telnet.TelOptEventData) (eventName st
 		return "Updated Vars", payloadStr, nil
 	}
 
-	return "", "", fmt.Errorf("new-environ: unknown event: %+v", eventData)
+	return o.BaseTelOpt.EventString(eventData)
 }
