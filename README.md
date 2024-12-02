@@ -102,7 +102,7 @@ By default, the terminal will reject all attempts at telopt negotiation by the r
 
 [There](https://github.com/gbazil/telnet) [are](https://github.com/reiver/go-telnet) [a](https://github.com/aprice/telnet) [great](https://github.com/plyul/telnet) [many](https://github.com/Tanjmaxalb/telnet-client) telnet libraries written in go.  However, telopt support in these libraries is usually spotty, and never extensible.  If one wants to write a mud client (check the org name) in go, strong support for many boutique telopts is required.  Concepts that are not part of the telnet RFC but are central to modern use of the telnet protocol, such as the weird rules around IAC GA/IAC EOR, are important and not represented in these libraries.
 
-The ultimate goal of this library is for it not just implement the basics of the telnet protocol, but be a useful core for real-world uses of telnet, such as MUD and BBS clients and servers, strange online games that use vt100 for TUIs, and other oddities. Making this work will take long-term, dedicated work on a telnet protocol library.
+The ultimate goal of this library is for it to not just implement the basics of the telnet protocol, but be a useful core for real-world uses of telnet, such as MUD and BBS clients and servers, strange online games that use vt100 for TUIs, and other oddities. Making this work will take long-term, dedicated labor on a telnet protocol library.
 
 ## What Is Missing?
 
