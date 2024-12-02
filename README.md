@@ -106,7 +106,7 @@ The ultimate goal of this library is for it to not just implement the basics of 
 
 ## What Is Missing?
 
-A lot!  The example provided make clear that this library works well when communications occur in linemode, with basic ANSI colors. Character mode works... less well.  VT100 worse than that.
+A lot!  The example provided makes it clear that this library works well when communications occur in linemode, with basic ANSI colors. Character mode works... less well.  VT100 worse than that.
 
 There are also a few random bits of problems around keyboard locking: prompt hints sent from the keyboard will currently be sent before the text they're supposed to follow when outbound text is being buffered, and there's no way to buffer outbound commands entirely (which is necessary to implement the MCCP family of telopts).
 
