@@ -73,7 +73,6 @@ func main() {
 			telopts.RegisterNEWENVIRON(telnet.TelOptAllowLocal, telopts.NEWENVIRONConfig{
 				WellKnownVarKeys: telopts.NEWENVIRONWellKnownVars,
 			}),
-			telopts.RegisterSENDLOCATION(telnet.TelOptAllowLocal, "SOMEWHERE MYSTERIOUS"),
 		},
 		EventHooks: telnet.EventHooks{
 			IncomingText:     []telnet.IncomingTextEvent{incomingText},

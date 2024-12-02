@@ -2,7 +2,17 @@
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/gomods/athens.svg)](https://github.com/moodclient/telnet) [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/github.com/moodclient/telnet) [![GoReportCard](https://goreportcard.com/badge/github.com/nanomsg/mangos)](https://goreportcard.com/report/github.com/moodclient/telnet)
 
-This library provides a wrapper that can fit around any net.Conn in order to provide Telnet services for any arbitrary connection.  In addition to basic line-level read and write that is compatible with RFC854/RFC5198, this library also provides an extensible base for Telnet Options (telopts), handles telopt negotiation and subnegotiation routing, and provides implementations for 9 heavily-used telopts.
+This library provides a wrapper that can fit around any net.Conn in order to provide Telnet services for any arbitrary connection.  In addition to basic line-level read and write that is compatible with RFC854/RFC5198, this library also provides an extensible base for Telnet Options (telopts), handles telopt negotiation and subnegotiation routing, and provides implementations for 9 heavily-used telopts:
+
+* CHARSET
+* ECHO
+* EOR
+* NAWS
+* NEW-ENVIRON
+* SEND-LOCATION
+* SUPPRESS-GO-AHEAD
+* TRANSMIT-BINARY
+* TTYPE
 
 In the examples folder, an example for a dead-simple terminal-based MUD client can be found.
 
