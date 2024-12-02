@@ -2,6 +2,7 @@ package telopts
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -97,9 +98,7 @@ func (o *NEWENVIRON) TransitionRemoteState(newState telnet.TelOptState) error {
 		for key := range o.remoteWellKnownVars {
 			delete(o.remoteWellKnownVars, key)
 		}
-	}
-
-	if newState == telnet.TelOptActive {
+	} else if newState == telnet.TelOptActive {
 		o.localVarsLock.Lock()
 		defer o.localVarsLock.Unlock()
 
@@ -154,7 +153,7 @@ func (o *NEWENVIRON) writeSendAll() {
 
 	buffer.WriteByte(newenvironSEND)
 
-	// Spell out the well-known vars we want to for the benefit of the remote- we want at least a
+	// Spell out the well-known vars we want for the benefit of the remote- we want at least an
 	// "I don't have that value" from them
 	for wellKnownVar := range o.wellKnownVars {
 		buffer.WriteByte(newenvironVAR)
@@ -278,7 +277,7 @@ func (o *NEWENVIRON) subnegotiationLoadValues(subnegotiation []byte) ([]string, 
 		if nextToken == newenvironUSERVAR || nextToken == newenvironVAR {
 			keySize, key := o.decodeText(subnegotiation[index:])
 			if keySize == 0 {
-				return nil, fmt.Errorf("new-environ: received 0-sized key with IS/INFO subnegotiation")
+				return nil, errors.New("new-environ: received 0-sized key with IS/INFO subnegotiation")
 			}
 
 			modifiedKeys = append(modifiedKeys, key)
@@ -434,12 +433,12 @@ func (o *NEWENVIRON) SubnegotiationString(subnegotiation []byte) (string, error)
 	return o.BaseTelOpt.SubnegotiationString(subnegotiation)
 }
 
-func (o *NEWENVIRON) SetVars(keysAndValues ...string) {
+func (o *NEWENVIRON) SetVars(keysAndValues ...string) error {
 	o.localVarsLock.Lock()
 	defer o.localVarsLock.Unlock()
 
 	if len(keysAndValues)%2 != 0 {
-		panic(fmt.Errorf("new-environ: uneven numbers of keys and values. dangling value: %s", keysAndValues[len(keysAndValues)-1]))
+		return fmt.Errorf("new-environ: uneven numbers of keys and values. dangling value: %s", keysAndValues[len(keysAndValues)-1])
 	}
 
 	var estimatedBufferSize int
@@ -476,6 +475,8 @@ func (o *NEWENVIRON) SetVars(keysAndValues ...string) {
 			Subnegotiation: buffer.Bytes(),
 		})
 	}
+
+	return nil
 }
 
 func (o *NEWENVIRON) ClearVars(keys ...string) {

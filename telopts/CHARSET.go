@@ -57,7 +57,13 @@ type CHARSET struct {
 }
 
 func (o *CHARSET) writeRequest(charSets []string) error {
-	subnegotiation := bytes.NewBuffer(nil)
+	// Estimate buffer size to reduce allocations
+	var bufferSize int
+	for _, charSet := range charSets {
+		bufferSize += len(charSet) + 1
+	}
+
+	subnegotiation := bytes.NewBuffer(make([]byte, 0, bufferSize+5))
 	err := subnegotiation.WriteByte(charsetREQUEST)
 	if err != nil {
 		return err
@@ -222,8 +228,6 @@ func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
 		EventType: CHARSETEventNegotiatedCharset,
 	})
 
-	// Stop waiting on our local negotiation
-	o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
 	o.writeAccept(o.bestRemoteEncoding)
 	return nil
 }
@@ -257,8 +261,10 @@ func (o *CHARSET) subnegotiateACCEPTED(subnegotiation []byte) error {
 	}
 
 	o.bestRemoteEncoding = charSet
-	o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
 
+	// Clear the lock after setting charset to ensure that all outbound text uses the new charset
+	// if we're going to change (we should clear the lock even if it fails since the negotiation
+	// will not continue)
 	err := o.Terminal().Charset().SetNegotiatedCharset(charSet)
 	if err != nil {
 		return err
@@ -284,11 +290,14 @@ func (o *CHARSET) Subnegotiate(subnegotiation []byte) error {
 	}
 
 	if subnegotiation[0] == charsetREJECTED {
+		// Depending on how we were rejected, we may keep the keyboard lock
 		return o.subnegotiateREJECTED()
 	}
 
 	if subnegotiation[0] == charsetACCEPTED {
-		return o.subnegotiateACCEPTED(subnegotiation)
+		err := o.subnegotiateACCEPTED(subnegotiation)
+		o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
+		return err
 	}
 
 	return o.BaseTelOpt.Subnegotiate(subnegotiation)
