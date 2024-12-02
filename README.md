@@ -22,9 +22,9 @@ Initialize a new terminal with your connection and configuration:
 
 The terminal will immediately begin communicating on the connection and negotiating options.  It will continue to do so until the connection is closed or the provided context is cancelled (or if the context times out, but that would be weird).
 
-You can call `terminal.WaitForExit()` to block the current goroutine until the terminal finishes.
+You can call `terminal.WaitForExit()` to block the current goroutine until the terminal shuts down.
 
-You can write lines of text to the terminal using `terminal.Keyboard().WriteString`.
+You can write text to the terminal using `terminal.Keyboard().WriteString`.
 
 ### Hooks
 
@@ -56,7 +56,7 @@ func incomingText(t *telnet.Terminal, data telnet.IncomingTextData) {
 	})
 ```
 
-You can also register hook with the terminal after creation:
+You can also register a hook with the terminal after creation:
 
 ```go
 terminal.RegisterIncomingTextHook(incomingText)
@@ -96,8 +96,10 @@ The ultimate goal of this library is for it not just implement the basics of the
 
 ## What Is Missing?
 
-A lot!  The example(s) provided make clear that this library works well when communications occur in linemode, with basic ANSI colors. Character mode works... less well.  VT100 worse than that.  
+A lot!  The example provided make clear that this library works well when communications occur in linemode, with basic ANSI colors. Character mode works... less well.  VT100 worse than that.
 
-Additionally, this has not been used in an environment where one server is tracking several different terminals for different connected users. I suspect that the library will grow difficult to work with.
+There are also a few random bits of problems around keyboard locking: prompt hints sent from the keyboard will currently be sent before the text they're supposed to follow when outbound text is being buffered, and there's no way to buffer outbound commands entirely (which is necessary to implement the MCCP family of telopts).
+
+Additionally, this has not been used in an environment where one server is tracking several different terminals for different connected users. The library may grow difficult to work with in that situation.
 
 The next step is going to be working with [Bubbletea](https://github.com/charmbracelet/bubbletea) to understand Raw Mode better in order to improve how the library interacts with character mode and VT100, with the ultimate goal of an example BBS client to sit alongside the example MUD client.
