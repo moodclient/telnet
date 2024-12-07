@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/ianaindex"
@@ -47,11 +49,13 @@ type Charset struct {
 
 	negotiatedLock sync.Mutex
 	negotiated     currentCharset
+
+	fallback *currentCharset
 }
 
 // NewCharset creates a new charset with a default charset & a CharsetUsage to decide
 // how the negotiated charset will be used if one is negotiated.
-func NewCharset(defaultCodePage string, usage CharsetUsage) (*Charset, error) {
+func NewCharset(defaultCodePage string, fallbackCodePage string, usage CharsetUsage) (*Charset, error) {
 	charset := &Charset{
 		usage: usage,
 	}
@@ -63,6 +67,15 @@ func NewCharset(defaultCodePage string, usage CharsetUsage) (*Charset, error) {
 
 	charset.defaultCharset = defaultCharset
 	charset.negotiated = defaultCharset
+
+	if fallbackCodePage != "" {
+		fallback, err := charset.buildCharset(fallbackCodePage)
+		if err != nil {
+			return nil, err
+		}
+
+		charset.fallback = &fallback
+	}
 
 	return charset, nil
 }
@@ -157,6 +170,21 @@ func (c *Charset) Encode(utf8Text string) ([]byte, error) {
 	return c.defaultCharset.encoder.Bytes([]byte(utf8Text))
 }
 
+func (c *Charset) attemptDecode(charset *currentCharset, buffer []byte, input []byte) (consumed int, buffered int, err error) {
+	for i := 0; i < len(input); i++ {
+		dstBytes, srcBytes, err := charset.decoder.Transform(buffer, input[:i+1], false)
+		if err != nil && !errors.Is(err, transform.ErrShortSrc) {
+			return srcBytes, dstBytes, err
+		}
+
+		if dstBytes > 0 {
+			return srcBytes, dstBytes, nil
+		}
+	}
+
+	return 0, 0, nil
+}
+
 // Decode accepts a byte slice that is encoded in the printer's current encoding
 // and returns a string of UTF-8 text
 func (c *Charset) Decode(buffer []byte, incomingText []byte) (consumed int, buffered int, err error) {
@@ -178,19 +206,32 @@ func (c *Charset) Decode(buffer []byte, incomingText []byte) (consumed int, buff
 		charset = c.defaultCharset
 	}
 
-	for i := 0; i < len(incomingText); i++ {
-		var dstBytes, srcBytes int
-		dstBytes, srcBytes, err = charset.decoder.Transform(buffer, incomingText[:i+1], false)
-		if err != nil && !errors.Is(err, transform.ErrShortDst) && !errors.Is(err, transform.ErrShortSrc) {
-			return srcBytes, dstBytes, err
-		}
-
-		if dstBytes > 0 {
-			return srcBytes, dstBytes, nil
-		}
+	consumed, buffered, err = c.attemptDecode(&charset, buffer, incomingText)
+	if err != nil {
+		return consumed, buffered, err
 	}
 
-	return 0, 0, err
+	firstRune, _ := utf8.DecodeRune(buffer)
+	if c.fallback != nil && (buffered == 0 || firstRune == unicode.ReplacementChar) {
+		var fallbackBuffer [10]byte
+		fallbackConsumed, fallbackBuffered, fallbackErr := c.attemptDecode(c.fallback, fallbackBuffer[:], incomingText)
+		if fallbackErr != nil || fallbackBuffered == 0 {
+			// Use what we got the first time
+			return consumed, buffered, err
+		}
+
+		firstFallbackRune, _ := utf8.DecodeRune(fallbackBuffer[:])
+		if firstFallbackRune == unicode.ReplacementChar {
+			// Use what we got the first time
+			return consumed, buffered, err
+		}
+
+		// Use the fallback decoding
+		copy(buffer, fallbackBuffer[:])
+		return fallbackConsumed, fallbackBuffered, nil
+	}
+
+	return consumed, buffered, err
 }
 
 func (c *Charset) buildCharset(codePage string) (currentCharset, error) {

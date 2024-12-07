@@ -52,6 +52,18 @@ type TerminalConfig struct {
 	// or some other mechanism, the default character set will be promoted to UTF-8.
 	DefaultCharsetName string
 
+	// FallbackCharsetName can be left empty. If populated, it is the registered IANA name for
+	// a character set that will be used when the normal character decoding fails. If decoding
+	// a character from the printer results in the unicode replacement character, decoding will
+	// be retried using this character set. The results will kept regardless of success or failure.
+	//
+	// This can be useful when connecting to BBS servers (or certain MUDs that act like them),
+	// because some use CP437 without any CHARSET negotiation at all. Since all bytes are valid
+	// CP437 bytes, replacing failed unicode bytes with CP437 bytes will usually detect and decode
+	// these servers without difficulty, with the minor exception of the small number of sequences
+	// that result in valid UTF-8 codepoints, such as \xdb\xb1.
+	FallbackCharsetName string
+
 	// CharsetUsage is only relevant if a new characters set has been negotiated via the CHARSET telopt.
 	// This field indicates when the negotiated character set will be used
 	// to send and receive text. According to RFC 2066, the charset is only to be used in BINARY mode

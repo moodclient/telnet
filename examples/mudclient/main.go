@@ -49,11 +49,11 @@ func main() {
 
 	terminal, err := telnet.NewTerminal(ctx, conn, telnet.TerminalConfig{
 		Side:               telnet.SideClient,
-		DefaultCharsetName: "US-ASCII",
+		DefaultCharsetName: "CP437",
 		TelOpts: []telnet.TelnetOption{
 			telopts.RegisterCHARSET(telnet.TelOptAllowLocal|telnet.TelOptAllowRemote, telopts.CHARSETConfig{
 				AllowAnyCharset:   true,
-				PreferredCharsets: []string{"UTF-8", "US-ASCII"},
+				PreferredCharsets: []string{"CP437", "UTF-8", "US-ASCII"},
 			}),
 			telopts.RegisterTRANSMITBINARY(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
 			telopts.RegisterEOR(telnet.TelOptAllowRemote | telnet.TelOptAllowLocal),

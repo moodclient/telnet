@@ -69,7 +69,7 @@ type Terminal struct {
 // All functioning of this terminal is determined by the properties passed in the TerminalConfig
 // object.  See that type for more information.
 func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Terminal, error) {
-	charset, err := NewCharset(config.DefaultCharsetName, config.CharsetUsage)
+	charset, err := NewCharset(config.DefaultCharsetName, config.FallbackCharsetName, config.CharsetUsage)
 	if err != nil {
 		return nil, err
 	}
