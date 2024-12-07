@@ -124,21 +124,29 @@ func (k *TelnetKeyboard) writeText(text string) error {
 	return k.writeOutput(b)
 }
 
-func (k *TelnetKeyboard) handleError(err error) bool {
-	if err == nil {
-		return false
+func (k *TelnetKeyboard) write(transport keyboardTransport) bool {
+	if transport.command.OpCode != 0 {
+		return k.handleError(k.writeCommand(transport.command))
 	}
 
-	if errors.Is(err, io.EOF) {
+	return k.handleError(k.writeText(transport.text))
+}
+
+func (k *TelnetKeyboard) handleError(err error) bool {
+	if err == nil {
 		return true
 	}
 
+	if errors.Is(err, io.EOF) {
+		return false
+	}
+
 	k.encounteredError(err)
-	return false
+	return true
 }
 
 func (k *TelnetKeyboard) keyboardLoop(ctx context.Context) {
-	queuedText := make([]string, 0, 10)
+	queuedWrites := make([]keyboardTransport, 0, 50)
 
 keyboardLoop:
 	for {
@@ -146,47 +154,43 @@ keyboardLoop:
 		case <-ctx.Done():
 			break keyboardLoop
 		case input := <-k.input:
-			if input.command.OpCode != 0 {
-				err := k.writeCommand(input.command)
-				if k.handleError(err) {
+			if input.command.OpCode != 0 && input.command.OpCode != GA && input.command.OpCode != EOR {
+				if !k.write(input) {
 					break keyboardLoop
 				}
 
 				continue
 			}
 
-			if len(queuedText) > 0 || k.lock.IsLocked() {
+			if len(queuedWrites) > 0 || k.lock.IsLocked() {
 				// We may have unlocked but the unlock handler hasn't actually
 				// run yet- we don't want this random bit of text to write out of
 				// order, so place it at the end of the queue if one exists
-				queuedText = append(queuedText, input.text)
+				queuedWrites = append(queuedWrites, input)
 				continue
 			}
 
-			err := k.writeText(input.text)
-			if k.handleError(err) {
+			if !k.write(input) {
 				break keyboardLoop
 			}
 
 		case <-k.lock.C:
 			// Write all queued text
-			for _, text := range queuedText {
-				err := k.writeText(text)
-				if k.handleError(err) {
+			for _, singleWrite := range queuedWrites {
+				if !k.write(singleWrite) {
 					break keyboardLoop
 				}
 			}
 
-			queuedText = queuedText[:0]
+			queuedWrites = queuedWrites[:0]
 		}
 	}
 
 	// Try to flush any remaining text
 	anyWriteFailed := false
-	if len(queuedText) > 0 && k.lock.IsLocked() {
-		for _, text := range queuedText {
-			err := k.writeText(text)
-			if k.handleError(err) {
+	if len(queuedWrites) > 0 && !k.lock.IsLocked() {
+		for _, singleWrite := range queuedWrites {
+			if !k.write(singleWrite) {
 				anyWriteFailed = true
 				break
 			}
@@ -196,16 +200,12 @@ keyboardLoop:
 	for !anyWriteFailed {
 		select {
 		case input := <-k.input:
-			var err error
-
-			if input.command.OpCode != 0 {
-				err = k.writeCommand(input.command)
-			} else if !k.lock.IsLocked() {
-				err = k.writeText(input.text)
-			}
-
-			if k.handleError(err) {
-				anyWriteFailed = true
+			if !k.lock.IsLocked() ||
+				(input.command.OpCode != 0 && input.command.OpCode != GA && input.command.OpCode != EOR) {
+				if !k.write(input) {
+					anyWriteFailed = true
+					continue
+				}
 			}
 		default:
 			// If we get to the end of the channel, we're done
