@@ -77,15 +77,24 @@ func (s *TelnetScanner) flushText(text string) {
 
 func (s *TelnetScanner) processDanglingBytes() {
 	var decodeBuffer [10]byte
+	tmpBytesSlice := s.bytesToDecode
 
-	for len(s.bytesToDecode) > 0 {
+	defer func() {
+		if len(s.bytesToDecode) > 0 {
+			if len(tmpBytesSlice) > 0 {
+				copy(s.bytesToDecode[:len(tmpBytesSlice)], tmpBytesSlice)
+			}
+
+			s.bytesToDecode = s.bytesToDecode[:len(tmpBytesSlice)]
+		}
+	}()
+
+	for len(tmpBytesSlice) > 0 {
 		var bytesIndex int
-		consumed, buffered, err := s.charset.Decode(decodeBuffer[:], s.bytesToDecode)
+		consumed, buffered, err := s.charset.Decode(decodeBuffer[:], tmpBytesSlice)
 
 		if consumed > 0 {
-			remainingBytes := len(s.bytesToDecode) - consumed
-			copy(s.bytesToDecode[:remainingBytes], s.bytesToDecode[consumed:])
-			s.bytesToDecode = s.bytesToDecode[:remainingBytes]
+			tmpBytesSlice = tmpBytesSlice[consumed:]
 		}
 
 		if buffered > 0 {
