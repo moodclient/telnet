@@ -49,12 +49,11 @@ type Terminal struct {
 	printer     *TelnetPrinter
 	telOptStack *telOptStack
 
-	printerOutputHooks     *EventPublisher[PrinterOutput]
-	outboundTextHooks      *EventPublisher[string]
-	outboundCommandHooks   *EventPublisher[Command]
-	encounteredErrorHooks  *EventPublisher[error]
-	telOptStateChangeHooks *EventPublisher[TelOptStateChangeData]
-	telOptEventHooks       *EventPublisher[TelOptEventData]
+	printerOutputHooks    *EventPublisher[PrinterOutput]
+	outboundTextHooks     *EventPublisher[string]
+	outboundCommandHooks  *EventPublisher[Command]
+	encounteredErrorHooks *EventPublisher[error]
+	telOptEventHooks      *EventPublisher[TelOptEvent]
 
 	remoteSuppressGA bool
 	remoteEcho       bool
@@ -90,12 +89,11 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 		keyboard: keyboard,
 		printer:  printer,
 
-		printerOutputHooks:     NewPublisher(config.EventHooks.PrinterOutput),
-		outboundTextHooks:      NewPublisher(config.EventHooks.OutboundText),
-		outboundCommandHooks:   NewPublisher(config.EventHooks.OutboundCommand),
-		encounteredErrorHooks:  NewPublisher(config.EventHooks.EncounteredError),
-		telOptStateChangeHooks: NewPublisher(config.EventHooks.TelOptStateChange),
-		telOptEventHooks:       NewPublisher(config.EventHooks.TelOptEvent),
+		printerOutputHooks:    NewPublisher(config.EventHooks.PrinterOutput),
+		outboundTextHooks:     NewPublisher(config.EventHooks.OutboundText),
+		outboundCommandHooks:  NewPublisher(config.EventHooks.OutboundCommand),
+		encounteredErrorHooks: NewPublisher(config.EventHooks.EncounteredError),
+		telOptEventHooks:      NewPublisher(config.EventHooks.TelOptEvent),
 	}
 
 	terminal.telOptStack, err = newTelOptStack(terminal, config.TelOpts)
@@ -202,40 +200,34 @@ func (t *Terminal) sentCommand(c Command) {
 	t.outboundCommandHooks.Fire(t, c)
 }
 
-func (t *Terminal) teloptStateChange(option TelnetOption, side TelOptSide, oldState TelOptState) {
-
-	// SUPPRESS-GO-AHEAD 3
-	if side == TelOptSideRemote && option.Code() == 3 {
-		if option.RemoteState() == TelOptActive {
-			t.remoteSuppressGA = true
-		} else if option.RemoteState() == TelOptInactive {
-			t.remoteSuppressGA = false
-		}
-	}
-
-	// ECHO 1
-	if side == TelOptSideRemote && option.Code() == 1 {
-		if option.RemoteState() == TelOptActive {
-			t.remoteEcho = true
-		} else if option.RemoteState() == TelOptInactive {
-			t.remoteEcho = true
-		}
-	}
-
-	t.telOptStateChangeHooks.Fire(t, TelOptStateChangeData{
-		Option:   option,
-		Side:     side,
-		OldState: oldState,
-	})
-}
-
 // RaiseTelOptEvent is called by telopt implementations to inject an event
 // into the terminal event stream. Telopts can use this method to fire arbitrary events
 // that can be interpreted by the consumer.  This is good for event-delivery telopts
 // such as GCMP, but it can also be used for things like NAWS to alert the consumer
 // that basic data has been collected from the remote.
-func (t *Terminal) RaiseTelOptEvent(data TelOptEventData) {
-	t.telOptEventHooks.Fire(t, data)
+func (t *Terminal) RaiseTelOptEvent(event TelOptEvent) {
+	switch typed := event.(type) {
+	case TelOptStateChangeEvent:
+		// SUPPRESS-GO-AHEAD 3
+		if typed.Side == TelOptSideRemote && typed.Option().Code() == 3 {
+			if typed.Option().RemoteState() == TelOptActive {
+				t.remoteSuppressGA = true
+			} else if typed.Option().RemoteState() == TelOptInactive {
+				t.remoteSuppressGA = false
+			}
+		}
+
+		// ECHO 1
+		if typed.Side == TelOptSideRemote && typed.Option().Code() == 1 {
+			if typed.Option().RemoteState() == TelOptActive {
+				t.remoteEcho = true
+			} else if typed.Option().RemoteState() == TelOptInactive {
+				t.remoteEcho = true
+			}
+		}
+	}
+
+	t.telOptEventHooks.Fire(t, event)
 }
 
 // CommandString converts a Command object into a legible stream. This can be useful
@@ -256,19 +248,19 @@ func (t *Terminal) WaitForExit() error {
 
 // RegisterPrinterOutputHook will register an event to be called when data is received
 // from the printer.
-func (t *Terminal) RegisterPrinterOutputHook(printerOutput PrinterOutputEvent) {
+func (t *Terminal) RegisterPrinterOutputHook(printerOutput PrinterOutputHandler) {
 	t.printerOutputHooks.Register(EventHook[PrinterOutput](printerOutput))
 }
 
 // RegisterOutboundTextHook will register an event to be called when a line of text
 // has been sent from the keyboard. This is primarily useful for debug logging.
-func (t *Terminal) RegisterOutboundTextHook(outboundText StringEvent) {
+func (t *Terminal) RegisterOutboundTextHook(outboundText StringHandler) {
 	t.outboundTextHooks.Register(EventHook[string](outboundText))
 }
 
 // RegisterOutboundCommandHook will register an event to be called when a command
 // has been sent from the keyboard. This is primarily useful for debug logging.
-func (t *Terminal) RegisterOutboundCommandHook(outboundCommand CommandEvent) {
+func (t *Terminal) RegisterOutboundCommandHook(outboundCommand CommandHandler) {
 	t.outboundCommandHooks.Register(EventHook[Command](outboundCommand))
 }
 
@@ -280,28 +272,28 @@ func (t *Terminal) RegisterOutboundCommandHook(outboundCommand CommandEvent) {
 // to the user, it will not be delivered via this hook. If an error ends terminal
 // processing immediately, it will not be delivered via this hook, it will be delivered
 // via WaitForExit.
-func (t *Terminal) RegisterEncounteredErrorHook(encounteredError ErrorEvent) {
+func (t *Terminal) RegisterEncounteredErrorHook(encounteredError ErrorHandler) {
 	t.encounteredErrorHooks.Register(EventHook[error](encounteredError))
 }
 
-// RegisterTelOptEventHook will reigster an event to be called when a telopt delivers
+// RegisterTelOptEventHook will register an event to be called when a telopt delivers
 // an event via RaiseTelOptEvent.
-func (t *Terminal) RegisterTelOptEventHook(telOptEvent TelOptEvent) {
-	t.telOptEventHooks.Register(EventHook[TelOptEventData](telOptEvent))
+func (t *Terminal) RegisterTelOptEventHook(telOptEvent TelOptEventHandler) {
+	t.telOptEventHooks.Register(EventHook[TelOptEvent](telOptEvent))
 }
 
-// RegisterTelOptStateChangeEventHook will register an event to be called when a telopt's
-// state changes. The possible states are located in TelOptState. All TelOpts registered
-// in NewTerminal begin in the TelOptInactive state. If a telopt has been registered to
-// request functioning, there will be an event call changing the state to TelOptRequested.
-// This event will only be called when the state actually changes- an external request
-// to move the telopt to a state it's already in will not trigger this event.
-//
-// Bear in mind that telopts have two states: the local state, indicating whether the telopt
-// is active on our side of the connection, and the remote state, indicating whether
-// the telopt is active on the peer's side of the connection.  Telopts can be active
-// on only one side of the connection, both, or neither.  Different telopts have different
-// expected behaviors.
-func (t *Terminal) RegisterTelOptStateChangeEventHook(telOptStateChange TelOptStateChangeEvent) {
-	t.telOptStateChangeHooks.Register(EventHook[TelOptStateChangeData](telOptStateChange))
-}
+// // RegisterTelOptStateChangeEventHook will register an event to be called when a telopt's
+// // state changes. The possible states are located in TelOptState. All TelOpts registered
+// // in NewTerminal begin in the TelOptInactive state. If a telopt has been registered to
+// // request functioning, there will be an event call changing the state to TelOptRequested.
+// // This event will only be called when the state actually changes- an external request
+// // to move the telopt to a state it's already in will not trigger this event.
+// //
+// // Bear in mind that telopts have two states: the local state, indicating whether the telopt
+// // is active on our side of the connection, and the remote state, indicating whether
+// // the telopt is active on the peer's side of the connection.  Telopts can be active
+// // on only one side of the connection, both, or neither.  Different telopts have different
+// // expected behaviors.
+// func (t *Terminal) RegisterTelOptStateChangeEventHook(telOptStateChange TelOptStateChangeEvent) {
+// 	t.telOptStateChangeHooks.Register(EventHook[TelOptStateChangeData](telOptStateChange))
+// }

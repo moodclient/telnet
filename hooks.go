@@ -78,30 +78,6 @@ func (s TelOptSide) String() string {
 	}
 }
 
-// TelOptStateChangeData is the parameter for a TelOptStateChangeEvent. It provides information
-// about a TelOpt becoming active or inactive
-type TelOptStateChangeData struct {
-	// Option indicates the specific telopt whose state has changed
-	Option TelnetOption
-	// Side indicates whether the state change occurred on the local or remote side
-	Side TelOptSide
-	// OldState is the state that previously was active for the specified side
-	OldState TelOptState
-}
-
-// TelOptEventData is the parameter for a TelOptEvent. It provides information about
-// an arbitrary event raised by a telopt
-type TelOptEventData struct {
-	// Option indicates the option who raised the event
-	Option TelnetOption
-	// EventType is an arbitrary code- this code is not global, it's specific to the
-	// telopt that raised the event
-	EventType int
-	// EventPayload is an object that may be attached to this event by the telopt. The
-	// contents of this payload are specific to the event being raised.
-	EventPayload any
-}
-
 // EventHook is a type for function pointers that are registered to receive events
 type EventHook[T any] func(terminal *Terminal, data T)
 
@@ -146,35 +122,30 @@ func (e *EventPublisher[U]) Fire(terminal *Terminal, eventData U) {
 	}
 }
 
-// ErrorEvent is an event hook type that receives errors
-type ErrorEvent func(t *Terminal, err error)
+// ErrorHandler is an event hook type that receives errors
+type ErrorHandler func(t *Terminal, err error)
 
-// PrinterOutputEvent is an event hook type that receives text, control codes, escape sequences, and commands from the printer
-type PrinterOutputEvent func(t *Terminal, output PrinterOutput)
+// PrinterOutputHandler is an event hook type that receives text, control codes, escape sequences, and commands from the printer
+type PrinterOutputHandler func(t *Terminal, output PrinterOutput)
 
-// CommandEvent is an event hook type that receives Command objects
-type CommandEvent func(t *Terminal, c Command)
+// CommandHandler is an event hook type that receives Command objects
+type CommandHandler func(t *Terminal, c Command)
 
-// StringEvent is an event hook type that receives strings
-type StringEvent func(t *Terminal, text string)
+// StringHandler is an event hook type that receives strings
+type StringHandler func(t *Terminal, text string)
 
-// TelOptStateChangeEvent is an event hook type that receives state changes for telopts.
-// See TelOptStateChangeData for more info
-type TelOptStateChangeEvent func(t *Terminal, data TelOptStateChangeData)
-
-// TelOptEvent is an event hook type that receives arbitrary events raised by telopts
+// TelOptEventHandler is an event hook type that receives arbitrary events raised by telopts
 // with Terminal.RaiseTelOptEvent
-type TelOptEvent func(t *Terminal, data TelOptEventData)
+type TelOptEventHandler func(t *Terminal, event TelOptEvent)
 
 // EventHooks is used to pass in a set of pre-registered event hooks to a Terminal
 // when calling NewTerminal.  See TerminalConfig for more info.
 type EventHooks struct {
-	EncounteredError []ErrorEvent
-	PrinterOutput    []PrinterOutputEvent
+	EncounteredError []ErrorHandler
+	PrinterOutput    []PrinterOutputHandler
 
-	OutboundText    []StringEvent
-	OutboundCommand []CommandEvent
+	OutboundText    []StringHandler
+	OutboundCommand []CommandHandler
 
-	TelOptStateChange []TelOptStateChangeEvent
-	TelOptEvent       []TelOptEvent
+	TelOptEvent []TelOptEventHandler
 }

@@ -2,6 +2,7 @@ package telopts
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -16,9 +17,14 @@ const (
 	ttypeSEND
 )
 
-const (
-	TTYPEEventRemoteTerminals int = iota
-)
+type TTYPERemoteTerminalsUpdatedEvent struct {
+	BaseTelOptEvent
+	RemoteTerminals []string
+}
+
+func (e TTYPERemoteTerminalsUpdatedEvent) String() string {
+	return fmt.Sprintf("TTYPE- Terminals Updated: %+v", e.RemoteTerminals)
+}
 
 func RegisterTTYPE(usage telnet.TelOptUsage, localTerminals []string) telnet.TelnetOption {
 	return &TTYPE{
@@ -159,9 +165,9 @@ func (o *TTYPE) Subnegotiate(subnegotiation []byte) error {
 
 		complete := o.addTerminal(subnegotiation)
 		if complete {
-			o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
-				Option:    o,
-				EventType: TTYPEEventRemoteTerminals,
+			o.Terminal().RaiseTelOptEvent(TTYPERemoteTerminalsUpdatedEvent{
+				BaseTelOptEvent: BaseTelOptEvent{o},
+				RemoteTerminals: o.GetRemoteTerminals(),
 			})
 		}
 
@@ -210,12 +216,4 @@ func (o *TTYPE) GetRemoteTerminals() []string {
 	defer o.remoteTerminalLock.Unlock()
 
 	return o.remoteTerminals
-}
-
-func (o *TTYPE) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
-	if eventData.EventType == TTYPEEventRemoteTerminals {
-		return "Update Terminals", "", nil
-	}
-
-	return o.BaseTelOpt.EventString(eventData)
 }

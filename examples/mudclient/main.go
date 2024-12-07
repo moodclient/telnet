@@ -70,8 +70,8 @@ func main() {
 			}),
 		},
 		EventHooks: telnet.EventHooks{
-			PrinterOutput:    []telnet.PrinterOutputEvent{printerOutput},
-			EncounteredError: []telnet.ErrorEvent{encounteredError},
+			PrinterOutput:    []telnet.PrinterOutputHandler{printerOutput},
+			EncounteredError: []telnet.ErrorHandler{encounteredError},
 		},
 	})
 	if err != nil {

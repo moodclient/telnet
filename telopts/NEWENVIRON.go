@@ -27,9 +27,15 @@ const (
 	newenvironUSERVAR
 )
 
-const (
-	NEWENVIRONEventRemoteVars int = iota
-)
+type NEWENVIRONRemoteVarsChangedEvent struct {
+	BaseTelOptEvent
+	UpdatedWellKnownVars []string
+	UpdatedUserVars      []string
+}
+
+func (e NEWENVIRONRemoteVarsChangedEvent) String() string {
+	return fmt.Sprintf("NEW-ENVIRON Remote Vars Changed- Well-Known: %+v, User: %+v", e.UpdatedWellKnownVars, e.UpdatedUserVars)
+}
 
 type NEWENVIRONConfig struct {
 	WellKnownVarKeys []string
@@ -264,11 +270,11 @@ func (o *NEWENVIRON) subnegotiateSEND(subnegotiation []byte) {
 	})
 }
 
-func (o *NEWENVIRON) subnegotiationLoadValues(subnegotiation []byte) ([]string, error) {
+func (o *NEWENVIRON) subnegotiationLoadValues(subnegotiation []byte) ([]string, []string, error) {
 	o.remoteVarsLock.Lock()
 	defer o.remoteVarsLock.Unlock()
 
-	var modifiedKeys []string
+	var modifiedWellKnownKeys, modifiedUserKeys []string
 	var index int
 	for index < len(subnegotiation) {
 		nextToken := subnegotiation[index]
@@ -277,10 +283,15 @@ func (o *NEWENVIRON) subnegotiationLoadValues(subnegotiation []byte) ([]string, 
 		if nextToken == newenvironUSERVAR || nextToken == newenvironVAR {
 			keySize, key := o.decodeText(subnegotiation[index:])
 			if keySize == 0 {
-				return nil, errors.New("new-environ: received 0-sized key with IS/INFO subnegotiation")
+				return nil, nil, errors.New("new-environ: received 0-sized key with IS/INFO subnegotiation")
 			}
 
-			modifiedKeys = append(modifiedKeys, key)
+			if nextToken == newenvironUSERVAR {
+				modifiedUserKeys = append(modifiedUserKeys, key)
+			} else {
+				modifiedWellKnownKeys = append(modifiedWellKnownKeys, key)
+			}
+
 			index += keySize
 
 			if index < len(subnegotiation) && subnegotiation[index] == newenvironVALUE {
@@ -302,7 +313,7 @@ func (o *NEWENVIRON) subnegotiationLoadValues(subnegotiation []byte) ([]string, 
 		}
 	}
 
-	return modifiedKeys, nil
+	return modifiedWellKnownKeys, modifiedUserKeys, nil
 }
 
 func (o *NEWENVIRON) Subnegotiate(subnegotiation []byte) error {
@@ -320,15 +331,15 @@ func (o *NEWENVIRON) Subnegotiate(subnegotiation []byte) error {
 
 	if o.RemoteState() == telnet.TelOptActive && (subnegotiation[0] == newenvironIS || subnegotiation[0] == newenvironINFO) {
 		// This method locks remote locks
-		modifiedKeys, err := o.subnegotiationLoadValues(subnegotiation[1:])
+		modifiedWellKnownKeys, modifiedUserKeys, err := o.subnegotiationLoadValues(subnegotiation[1:])
 		if err != nil {
 			return err
 		}
 
-		o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
-			Option:       o,
-			EventType:    NEWENVIRONEventRemoteVars,
-			EventPayload: modifiedKeys,
+		o.Terminal().RaiseTelOptEvent(NEWENVIRONRemoteVarsChangedEvent{
+			BaseTelOptEvent:      BaseTelOptEvent{o},
+			UpdatedWellKnownVars: modifiedWellKnownKeys,
+			UpdatedUserVars:      modifiedUserKeys,
 		})
 	}
 
@@ -528,49 +539,4 @@ func (o *NEWENVIRON) RemoteUserVar(key string) (string, bool) {
 
 	value, hasValue := o.remoteUserVars[key]
 	return value, hasValue
-}
-
-func (o *NEWENVIRON) ModifiedKeysFromEvent(event telnet.TelOptEventData) (wellKnownVars []string, userVars []string, err error) {
-	if event.Option != o {
-		return nil, nil, fmt.Errorf("new-environ: received a TelOptEventData for a different option")
-	}
-
-	if event.EventType != NEWENVIRONEventRemoteVars {
-		return nil, nil, fmt.Errorf("new-environ: unexpected event type %d", event.EventType)
-	}
-
-	if event.EventPayload == nil {
-		return
-	}
-
-	keys, isStringSlice := event.EventPayload.([]string)
-	if !isStringSlice {
-		return nil, nil, fmt.Errorf("new-environ: unexpected event payload type %T", event.EventPayload)
-	}
-
-	for _, key := range keys {
-		_, isWellKnown := o.wellKnownVars[key]
-		if isWellKnown {
-			wellKnownVars = append(wellKnownVars, key)
-		} else {
-			userVars = append(userVars, key)
-		}
-	}
-
-	return
-}
-
-func (o *NEWENVIRON) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
-	if eventData.EventType == NEWENVIRONEventRemoteVars {
-		updatedVars, correctType := eventData.EventPayload.([]string)
-		payloadStr := "[]"
-
-		if correctType && len(updatedVars) == 0 {
-			payloadStr = fmt.Sprintf("%+v", updatedVars)
-		}
-
-		return "Updated Vars", payloadStr, nil
-	}
-
-	return o.BaseTelOpt.EventString(eventData)
 }

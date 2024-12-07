@@ -24,10 +24,23 @@ const (
 
 const charsetKeyboardLock = "lock.charset"
 
-const (
-	CHARSETEventNegotiatedCharset int = iota
-	CHARSETEventDefaultCharset
-)
+type CHARSETNegotiationSuccessEvent struct {
+	BaseTelOptEvent
+	NewCharsetName string
+}
+
+func (e CHARSETNegotiationSuccessEvent) String() string {
+	return fmt.Sprintf("CHARSET Negotiated To: %s", e.NewCharsetName)
+}
+
+type CHARSETDefaultChangedEvent struct {
+	BaseTelOptEvent
+	NewDefaultCharset string
+}
+
+func (e CHARSETDefaultChangedEvent) String() string {
+	return fmt.Sprintf("CHARSET Default Changed To: %s", e.NewDefaultCharset)
+}
 
 type CHARSETConfig struct {
 	PreferredCharsets []string
@@ -190,11 +203,13 @@ func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
 		if charSetList[i] == "UTF-8" {
 			// We know the remote can handle UTF-8 so use it as our default charset no matter what happens
 			// this will allow the consumer to ask the terminal whether the remote can handle UTF-8
-			_ = o.Terminal().Charset().PromoteDefaultCharset("US-ASCII", "UTF-8")
-			o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
-				Option:    o,
-				EventType: CHARSETEventDefaultCharset,
-			})
+			changed, _ := o.Terminal().Charset().PromoteDefaultCharset("US-ASCII", "UTF-8")
+			if changed {
+				o.Terminal().RaiseTelOptEvent(CHARSETDefaultChangedEvent{
+					BaseTelOptEvent:   BaseTelOptEvent{o},
+					NewDefaultCharset: "UTF-8",
+				})
+			}
 		}
 
 		if o.isAcceptableCharset(charSetList[i]) {
@@ -223,9 +238,9 @@ func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
 		o.writeReject()
 		return err
 	}
-	o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
-		Option:    o,
-		EventType: CHARSETEventNegotiatedCharset,
+	o.Terminal().RaiseTelOptEvent(CHARSETNegotiationSuccessEvent{
+		BaseTelOptEvent: BaseTelOptEvent{o},
+		NewCharsetName:  o.bestRemoteEncoding,
 	})
 
 	o.writeAccept(o.bestRemoteEncoding)
@@ -270,9 +285,9 @@ func (o *CHARSET) subnegotiateACCEPTED(subnegotiation []byte) error {
 		return err
 	}
 
-	o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
-		Option:    o,
-		EventType: CHARSETEventNegotiatedCharset,
+	o.Terminal().RaiseTelOptEvent(CHARSETNegotiationSuccessEvent{
+		BaseTelOptEvent: BaseTelOptEvent{o},
+		NewCharsetName:  charSet,
 	})
 
 	return nil
@@ -343,16 +358,4 @@ func (o *CHARSET) SubnegotiationString(subnegotiation []byte) (string, error) {
 	}
 
 	return o.BaseTelOpt.SubnegotiationString(subnegotiation)
-}
-
-func (o *CHARSET) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
-	if eventData.EventType == CHARSETEventDefaultCharset {
-		return "Promote Default Charset", "", nil
-	}
-
-	if eventData.EventType == CHARSETEventNegotiatedCharset {
-		return "Update Negotiated Charset", "", nil
-	}
-
-	return o.BaseTelOpt.EventString(eventData)
 }

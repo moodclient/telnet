@@ -80,8 +80,6 @@ type TelnetOption interface {
 	Subnegotiate(subnegotiation []byte) error
 	// SubnegotiationString creates a legible string for a subnegotiation request
 	SubnegotiationString(subnegotiation []byte) (string, error)
-	// EventString creates legible strings for eventdata contents
-	EventString(eventData TelOptEventData) (eventName string, payload string, err error)
 }
 
 // TelOptState indicates whether the telopt is currently active, inactive, or other
@@ -111,6 +109,26 @@ func (s TelOptState) String() string {
 	default:
 		return "Unknown"
 	}
+}
+
+type TelOptEvent interface {
+	String() string
+	Option() TelnetOption
+}
+
+type TelOptStateChangeEvent struct {
+	TelnetOption TelnetOption
+	Side         TelOptSide
+	OldState     TelOptState
+	NewState     TelOptState
+}
+
+func (e TelOptStateChangeEvent) Option() TelnetOption {
+	return e.TelnetOption
+}
+
+func (e TelOptStateChangeEvent) String() string {
+	return fmt.Sprintf("%s: %s state changed from %s to %s", e.Option, e.Side, e.OldState, e.NewState)
 }
 
 type telOptStack struct {
@@ -174,7 +192,12 @@ func (s *telOptStack) WriteRequests(terminal *Terminal) error {
 					return err
 				}
 
-				option.Terminal().teloptStateChange(option, TelOptSideLocal, oldState)
+				option.Terminal().RaiseTelOptEvent(TelOptStateChangeEvent{
+					TelnetOption: option,
+					Side:         TelOptSideLocal,
+					OldState:     oldState,
+					NewState:     TelOptRequested,
+				})
 			}
 		}
 
@@ -192,7 +215,12 @@ func (s *telOptStack) WriteRequests(terminal *Terminal) error {
 					return err
 				}
 
-				option.Terminal().teloptStateChange(option, TelOptSideRemote, oldState)
+				option.Terminal().RaiseTelOptEvent(TelOptStateChangeEvent{
+					TelnetOption: option,
+					Side:         TelOptSideRemote,
+					OldState:     oldState,
+					NewState:     TelOptRequested,
+				})
 			}
 		}
 	}
@@ -241,7 +269,12 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 			return err
 		}
 
-		option.Terminal().teloptStateChange(option, side, oldState)
+		option.Terminal().RaiseTelOptEvent(TelOptStateChangeEvent{
+			TelnetOption: option,
+			Side:         side,
+			OldState:     oldState,
+			NewState:     TelOptInactive,
+		})
 
 		return nil
 	}
@@ -269,7 +302,12 @@ func (s *telOptStack) ProcessCommand(terminal *Terminal, c Command) error {
 		return err
 	}
 
-	terminal.teloptStateChange(option, side, oldState)
+	option.Terminal().RaiseTelOptEvent(TelOptStateChangeEvent{
+		TelnetOption: option,
+		Side:         side,
+		OldState:     oldState,
+		NewState:     TelOptActive,
+	})
 	return nil
 }
 

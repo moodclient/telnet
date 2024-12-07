@@ -1,6 +1,7 @@
 package telopts
 
 import (
+	"fmt"
 	"sync/atomic"
 
 	"github.com/moodclient/telnet"
@@ -8,9 +9,14 @@ import (
 
 const sendlocation telnet.TelOptCode = 23
 
-const (
-	SENDLOCATIONEventRemoteLocation int = iota
-)
+type SENDLOCATIONRemoteUpdatedEvent struct {
+	BaseTelOptEvent
+	NewLocation string
+}
+
+func (e SENDLOCATIONRemoteUpdatedEvent) String() string {
+	return fmt.Sprintf("SEND-LOCATION Remote Updated: %s", e.NewLocation)
+}
 
 func RegisterSENDLOCATION(usage telnet.TelOptUsage, localLocation string) telnet.TelnetOption {
 	option := &SENDLOCATION{
@@ -63,9 +69,9 @@ func (o *SENDLOCATION) TransitionRemoteState(newState telnet.TelOptState) error 
 func (o *SENDLOCATION) Subnegotiate(subnegotiation []byte) error {
 	if o.RemoteState() == telnet.TelOptActive {
 		o.remoteLocation.Store(string(subnegotiation))
-		o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
-			Option:    o,
-			EventType: SENDLOCATIONEventRemoteLocation,
+		o.Terminal().RaiseTelOptEvent(SENDLOCATIONRemoteUpdatedEvent{
+			BaseTelOptEvent: BaseTelOptEvent{o},
+			NewLocation:     string(subnegotiation),
 		})
 	}
 
@@ -88,12 +94,4 @@ func (o *SENDLOCATION) SetLocalLocation(location string) {
 
 func (o *SENDLOCATION) RemoteLocation() string {
 	return o.remoteLocation.Load().(string)
-}
-
-func (o *SENDLOCATION) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
-	if eventData.EventType == SENDLOCATIONEventRemoteLocation {
-		return "Update Location", "", nil
-	}
-
-	return o.BaseTelOpt.EventString(eventData)
 }

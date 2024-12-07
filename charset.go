@@ -245,17 +245,17 @@ func (c *Charset) buildCharset(codePage string) (currentCharset, error) {
 // to promote the default charset from US-ASCII to UTF-8. The US-ASCII decoder will
 // always decode UTF-8, but it's useful for the consumer to know whether the remote
 // actually supports UTF-8, in order to decide whether to send things like emojis.
-func (c *Charset) PromoteDefaultCharset(oldCodePage string, newCodePage string) error {
+func (c *Charset) PromoteDefaultCharset(oldCodePage string, newCodePage string) (bool, error) {
 	c.defaultLock.Lock()
 	defer c.defaultLock.Unlock()
 
 	if c.defaultCharset.name != oldCodePage {
-		return nil
+		return false, nil
 	}
 
 	charset, err := c.buildCharset(newCodePage)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	c.negotiatedLock.Lock()
@@ -266,7 +266,7 @@ func (c *Charset) PromoteDefaultCharset(oldCodePage string, newCodePage string) 
 	}
 
 	c.defaultCharset = charset
-	return nil
+	return true, nil
 }
 
 // SetNegotiatedCharset modifies the negotiated charset to the requested character set

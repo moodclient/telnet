@@ -8,6 +8,14 @@ import (
 	"github.com/moodclient/telnet"
 )
 
+type BaseTelOptEvent struct {
+	TelnetOption telnet.TelnetOption
+}
+
+func (e BaseTelOptEvent) Option() telnet.TelnetOption {
+	return e.TelnetOption
+}
+
 type BaseTelOpt struct {
 	code        telnet.TelOptCode
 	name        string
@@ -72,8 +80,4 @@ func (o *BaseTelOpt) Subnegotiate(subnegotiation []byte) error {
 
 func (o *BaseTelOpt) SubnegotiationString(subnegotiation []byte) (string, error) {
 	return "", fmt.Errorf("%s: unexpected subnegotiation %+v", strings.ToLower(o.name), subnegotiation)
-}
-
-func (o *BaseTelOpt) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
-	return "", "", fmt.Errorf("%s: unexpected event %+v", strings.ToLower(o.name), eventData)
 }

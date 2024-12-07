@@ -32,7 +32,6 @@ func NewDebugLog(terminal *telnet.Terminal, logger *slog.Logger, config DebugLog
 	terminal.RegisterOutboundCommandHook(log.logOutboundCommand)
 	terminal.RegisterOutboundTextHook(log.logOutboundText)
 	terminal.RegisterTelOptEventHook(log.logTelOptEvent)
-	terminal.RegisterTelOptStateChangeEventHook(log.logTelOptStateChange)
 
 	return log
 }
@@ -58,31 +57,15 @@ func (l *DebugLog) logOutboundText(terminal *telnet.Terminal, text string) {
 	l.logger.LogAttrs(context.Background(), l.config.OutboundTextLevel, "Sent text", slog.String("contents", text))
 }
 
-func (l *DebugLog) logTelOptEvent(terminal *telnet.Terminal, event telnet.TelOptEventData) {
-	attrs := []slog.Attr{slog.String("option", event.Option.String())}
-
-	name, payload, err := event.Option.EventString(event)
-	if err != nil {
-		attrs = append(attrs, slog.Any("error", err))
-	} else {
-		attrs = append(attrs, slog.String("event", name))
-		if payload != "" {
-			attrs = append(attrs, slog.String("payload", payload))
-		}
+func (l *DebugLog) logTelOptEvent(terminal *telnet.Terminal, event telnet.TelOptEvent) {
+	switch typed := event.(type) {
+	case telnet.TelOptStateChangeEvent:
+		l.logger.LogAttrs(context.Background(), l.config.TelOptStageChangeLevel, "TelOpt State Change",
+			slog.String("oldState", typed.OldState.String()),
+			slog.String("newState", typed.NewState.String()),
+			slog.String("side", typed.Side.String()),
+		)
+	default:
+		l.logger.LogAttrs(context.Background(), l.config.TelOptEventLevel, event.String(), slog.String("option", event.Option().String()))
 	}
-
-	l.logger.LogAttrs(context.Background(), l.config.TelOptEventLevel, "TelOpt Event", attrs...)
-}
-
-func (l *DebugLog) logTelOptStateChange(terminal *telnet.Terminal, event telnet.TelOptStateChangeData) {
-	newState := event.Option.LocalState()
-	if event.Side == telnet.TelOptSideRemote {
-		newState = event.Option.RemoteState()
-	}
-
-	l.logger.LogAttrs(context.Background(), l.config.TelOptStageChangeLevel, "TelOpt State Change",
-		slog.String("oldState", event.OldState.String()),
-		slog.String("newState", newState.String()),
-		slog.String("side", event.Side.String()),
-	)
 }

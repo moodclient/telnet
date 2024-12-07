@@ -29,7 +29,7 @@ func NewKeyboardFeed(terminal *telnet.Terminal, input io.Reader, echoHandlers []
 		input:         input,
 		echoPublisher: telnet.NewPublisher(echoHandlers),
 	}
-	terminal.RegisterTelOptStateChangeEventHook(feed.telOptStateChange)
+	terminal.RegisterTelOptEventHook(feed.telOptEvents)
 
 	return feed, nil
 }
@@ -116,14 +116,17 @@ func (f *KeyboardFeed) FeedLoop() error {
 	return scanner.Err()
 }
 
-func (f *KeyboardFeed) telOptStateChange(terminal *telnet.Terminal, data telnet.TelOptStateChangeData) {
-	if data.Side != telnet.TelOptSideRemote {
-		return
-	}
+func (f *KeyboardFeed) telOptEvents(terminal *telnet.Terminal, event telnet.TelOptEvent) {
+	switch typed := event.(type) {
+	case telnet.TelOptStateChangeEvent:
+		if typed.Side != telnet.TelOptSideRemote {
+			return
+		}
 
-	// If we switch over to character mode as a result of a remote change, flush
-	// all characters
-	if terminal.IsCharacterMode() {
-		terminal.Keyboard().WriteString(f.flushInput())
+		// If we switch over to character mode as a result of a remote change, flush
+		// all characters
+		if terminal.IsCharacterMode() {
+			terminal.Keyboard().WriteString(f.flushInput())
+		}
 	}
 }

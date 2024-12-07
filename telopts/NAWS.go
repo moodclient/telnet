@@ -9,9 +9,15 @@ import (
 
 const naws telnet.TelOptCode = 31
 
-const (
-	NAWSEventRemoteSize int = iota
-)
+type NAWSRemoteSizeChangedEvent struct {
+	BaseTelOptEvent
+	NewRemoteWidth  int
+	NewRemoteHeight int
+}
+
+func (e NAWSRemoteSizeChangedEvent) String() string {
+	return fmt.Sprintf("NAWS Remote Size Changed- Width: %d, Height: %d", e.NewRemoteWidth, e.NewRemoteHeight)
+}
 
 func RegisterNAWS(usage telnet.TelOptUsage) telnet.TelnetOption {
 	return &NAWS{
@@ -85,9 +91,10 @@ func (o *NAWS) Subnegotiate(subnegotiation []byte) error {
 	height := (int(subnegotiation[2]) << 8) | int(subnegotiation[3])
 
 	o.storeRemoteSize(width, height)
-	o.Terminal().RaiseTelOptEvent(telnet.TelOptEventData{
-		Option:    o,
-		EventType: NAWSEventRemoteSize,
+	o.Terminal().RaiseTelOptEvent(NAWSRemoteSizeChangedEvent{
+		BaseTelOptEvent: BaseTelOptEvent{o},
+		NewRemoteWidth:  width,
+		NewRemoteHeight: height,
 	})
 
 	return nil
@@ -118,12 +125,4 @@ func (o *NAWS) GetRemoteSize() (width, height int) {
 	defer o.remoteLock.Unlock()
 
 	return o.remoteWidth, o.remoteHeight
-}
-
-func (o *NAWS) EventString(eventData telnet.TelOptEventData) (eventName string, payload string, err error) {
-	if eventData.EventType == NAWSEventRemoteSize {
-		return "Updated Remote Size", "", nil
-	}
-
-	return o.BaseTelOpt.EventString(eventData)
 }
