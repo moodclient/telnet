@@ -2,7 +2,10 @@ package telnet
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"strconv"
+	"strings"
 )
 
 // Terminal is a wrapper around a net.Conn to enable telnet communications
@@ -42,12 +45,12 @@ import (
 // terminal altogether. It is the responsibility of the consumer to
 // move long-running calls to their own concurrency scheme where necessary.
 type Terminal struct {
-	conn        net.Conn
-	side        TerminalSide
-	charset     *Charset
-	keyboard    *TelnetKeyboard
-	printer     *TelnetPrinter
-	telOptStack *telOptStack
+	conn     net.Conn
+	side     TerminalSide
+	charset  *Charset
+	keyboard *TelnetKeyboard
+	printer  *TelnetPrinter
+	options  map[TelOptCode]TelnetOption
 
 	printerOutputHooks    *EventPublisher[PrinterOutput]
 	outboundTextHooks     *EventPublisher[string]
@@ -88,6 +91,7 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 		charset:  charset,
 		keyboard: keyboard,
 		printer:  printer,
+		options:  make(map[TelOptCode]TelnetOption),
 
 		printerOutputHooks:    NewPublisher(config.EventHooks.PrinterOutput),
 		outboundTextHooks:     NewPublisher(config.EventHooks.OutboundText),
@@ -95,8 +99,7 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 		encounteredErrorHooks: NewPublisher(config.EventHooks.EncounteredError),
 		telOptEventHooks:      NewPublisher(config.EventHooks.TelOptEvent),
 	}
-
-	terminal.telOptStack, err = newTelOptStack(terminal, config.TelOpts)
+	err = terminal.initTelopts(config.TelOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +119,7 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 		// These goroutines will stop whenever the connection dies or whenever the
 		// original context passed in by the consumer is cancelled
 		go keyboard.keyboardLoop(connCtx)
-		go printer.printerLoop(connCtx)
+		go printer.printerLoop(connCtx, terminal)
 
 		// We use WaitForExit purely to ensure that we don't cancel the terminal loop
 		// context until the keyboard and printer are closed- the consumer will actually
@@ -129,7 +132,7 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 	}()
 
 	// Kick off telopt negotiation by writing commands for our requested telopts
-	err = terminal.telOptStack.WriteRequests(terminal)
+	err = terminal.writeTelOptRequests()
 	if err != nil {
 		return nil, err
 	}
@@ -184,11 +187,6 @@ func (t *Terminal) encounteredError(err error) {
 }
 
 func (t *Terminal) encounteredPrinterOutput(output PrinterOutput) {
-	cmd, isCmd := output.(CommandOutput)
-	if isCmd {
-		t.telOptStack.ProcessCommand(t, cmd.Command)
-	}
-
 	t.printerOutputHooks.Fire(t, output)
 }
 
@@ -233,7 +231,52 @@ func (t *Terminal) RaiseTelOptEvent(event TelOptEvent) {
 // CommandString converts a Command object into a legible stream. This can be useful
 // when logging a received command object
 func (t *Terminal) CommandString(c Command) string {
-	return t.telOptStack.CommandString(c)
+	var sb strings.Builder
+	sb.WriteString("IAC ")
+
+	opCode, hasOpCode := commandCodes[c.OpCode]
+	if !hasOpCode {
+		opCode = strconv.Itoa(int(c.OpCode))
+	}
+
+	sb.WriteString(opCode)
+
+	if c.OpCode == GA || c.OpCode == NOP || c.OpCode == EOR {
+		return sb.String()
+	}
+
+	sb.WriteByte(' ')
+
+	option, hasOption := t.options[c.Option]
+
+	if !hasOption {
+		sb.WriteString("? Unknown Option ")
+		sb.WriteString(strconv.Itoa(int(c.Option)))
+		sb.WriteString("?")
+	} else {
+		sb.WriteString(option.String())
+	}
+
+	if c.OpCode != SB {
+		return sb.String()
+	}
+
+	sb.WriteByte(' ')
+
+	if !hasOption {
+		sb.WriteString(fmt.Sprintf("%+v", c.Subnegotiation))
+	} else {
+		str, err := option.SubnegotiationString(c.Subnegotiation)
+
+		if err != nil {
+			sb.WriteString(fmt.Sprintf("%+v", c.Subnegotiation))
+		} else {
+			sb.WriteString(str)
+		}
+	}
+
+	sb.WriteString(" IAC SE")
+	return sb.String()
 }
 
 // WaitForExit will block until the terminal has ceased operation, either due to

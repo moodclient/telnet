@@ -36,7 +36,7 @@ func (p *TelnetPrinter) isSuppressedPromptCommand(t PromptType) bool {
 		(t == PromptEOR && promptCommands&PromptCommandEOR == 0)
 }
 
-func (p *TelnetPrinter) printerLoop(ctx context.Context) {
+func (p *TelnetPrinter) printerLoop(ctx context.Context, terminal *Terminal) {
 	for ctx.Err() == nil && p.scanner.Scan(ctx) {
 		if p.scanner.Err() != nil {
 			// Don't worry about temporary errors
@@ -63,6 +63,8 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context) {
 			if o.Command.OpCode == 0 || o.Command.OpCode == NOP {
 				continue
 			}
+
+			terminal.processTelOptCommand(o.Command)
 		}
 
 		p.eventPump.EncounteredPrinterOutput(p.scanner.Output())
