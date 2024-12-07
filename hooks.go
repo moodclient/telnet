@@ -149,8 +149,8 @@ func (e *EventPublisher[U]) Fire(terminal *Terminal, eventData U) {
 // ErrorEvent is an event hook type that receives errors
 type ErrorEvent func(t *Terminal, err error)
 
-// IncomingTextEvent is an event hook type that receives lines of text from the printer
-type IncomingTextEvent func(t *Terminal, data IncomingTextData)
+// PrinterOutputEvent is an event hook type that receives text, control codes, escape sequences, and commands from the printer
+type PrinterOutputEvent func(t *Terminal, output PrinterOutput)
 
 // CommandEvent is an event hook type that receives Command objects
 type CommandEvent func(t *Terminal, c Command)
@@ -170,9 +170,7 @@ type TelOptEvent func(t *Terminal, data TelOptEventData)
 // when calling NewTerminal.  See TerminalConfig for more info.
 type EventHooks struct {
 	EncounteredError []ErrorEvent
-
-	IncomingText    []IncomingTextEvent
-	IncomingCommand []CommandEvent
+	PrinterOutput    []PrinterOutputEvent
 
 	OutboundText    []StringEvent
 	OutboundCommand []CommandEvent

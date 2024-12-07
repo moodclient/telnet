@@ -49,8 +49,7 @@ type Terminal struct {
 	printer     *TelnetPrinter
 	telOptStack *telOptStack
 
-	incomingTextHooks      *EventPublisher[IncomingTextData]
-	incomingCommandHooks   *EventPublisher[Command]
+	printerOutputHooks     *EventPublisher[PrinterOutput]
 	outboundTextHooks      *EventPublisher[string]
 	outboundCommandHooks   *EventPublisher[Command]
 	encounteredErrorHooks  *EventPublisher[error]
@@ -91,8 +90,7 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 		keyboard: keyboard,
 		printer:  printer,
 
-		incomingTextHooks:      NewPublisher(config.EventHooks.IncomingText),
-		incomingCommandHooks:   NewPublisher(config.EventHooks.IncomingCommand),
+		printerOutputHooks:     NewPublisher(config.EventHooks.PrinterOutput),
 		outboundTextHooks:      NewPublisher(config.EventHooks.OutboundText),
 		outboundCommandHooks:   NewPublisher(config.EventHooks.OutboundCommand),
 		encounteredErrorHooks:  NewPublisher(config.EventHooks.EncounteredError),
@@ -183,25 +181,17 @@ func (t *Terminal) IsCharacterMode() bool {
 	return t.remoteEcho && t.remoteSuppressGA
 }
 
-func (t *Terminal) encounteredCommand(c Command) {
-	t.incomingCommandHooks.Fire(t, c)
-
-	err := t.telOptStack.ProcessCommand(t, c)
-	if err != nil {
-		t.encounteredError(err)
-	}
-}
-
 func (t *Terminal) encounteredError(err error) {
 	t.encounteredErrorHooks.Fire(t, err)
 }
 
-func (t *Terminal) encounteredText(text string, lineEnding LineEnding, overwrite bool) {
-	t.incomingTextHooks.Fire(t, IncomingTextData{
-		Text:              text,
-		LineEnding:        lineEnding,
-		OverwritePrevious: overwrite,
-	})
+func (t *Terminal) encounteredPrinterOutput(output PrinterOutput) {
+	cmd, isCmd := output.(CommandOutput)
+	if isCmd {
+		t.telOptStack.ProcessCommand(t, cmd.Command)
+	}
+
+	t.printerOutputHooks.Fire(t, output)
 }
 
 func (t *Terminal) sentText(text string) {
@@ -264,19 +254,10 @@ func (t *Terminal) WaitForExit() error {
 	return err
 }
 
-// RegisterIncomingTextHook will register an event to be called when a line of text
-// has been received from the printer.
-func (t *Terminal) RegisterIncomingTextHook(incomingText IncomingTextEvent) {
-	t.incomingTextHooks.Register(EventHook[IncomingTextData](incomingText))
-}
-
-// RegisterIncomingCommandHook will register an event to be called when an IAC
-// command has been received from the printer.  This is useful for debug logging,
-// but in most cases, the consumer will want to use RegisterTelOptEventHook and/or
-// RegisterTelOptStateChangeEventHook in order to receive the outcome of a received
-// command.
-func (t *Terminal) RegisterIncomingCommandHook(incomingCommand CommandEvent) {
-	t.incomingCommandHooks.Register(EventHook[Command](incomingCommand))
+// RegisterPrinterOutputHook will register an event to be called when data is received
+// from the printer.
+func (t *Terminal) RegisterPrinterOutputHook(printerOutput PrinterOutputEvent) {
+	t.printerOutputHooks.Register(EventHook[PrinterOutput](printerOutput))
 }
 
 // RegisterOutboundTextHook will register an event to be called when a line of text

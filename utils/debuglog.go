@@ -28,8 +28,7 @@ func NewDebugLog(terminal *telnet.Terminal, logger *slog.Logger, config DebugLog
 	log := &DebugLog{logger: logger, config: config}
 
 	terminal.RegisterEncounteredErrorHook(log.logError)
-	terminal.RegisterIncomingCommandHook(log.logIncomingCommand)
-	terminal.RegisterIncomingTextHook(log.logIncomingText)
+	terminal.RegisterPrinterOutputHook(log.logPrinterOutput)
 	terminal.RegisterOutboundCommandHook(log.logOutboundCommand)
 	terminal.RegisterOutboundTextHook(log.logOutboundText)
 	terminal.RegisterTelOptEventHook(log.logTelOptEvent)
@@ -42,13 +41,13 @@ func (l *DebugLog) logError(terminal *telnet.Terminal, err error) {
 	l.logger.LogAttrs(context.Background(), l.config.EncounteredErrorLevel, "Encountered error", slog.Any("error", err))
 }
 
-func (l *DebugLog) logIncomingCommand(terminal *telnet.Terminal, c telnet.Command) {
-	l.logger.LogAttrs(context.Background(), l.config.IncomingCommandLevel, "Received command", slog.String("command", terminal.CommandString(c)))
-}
-
-func (l *DebugLog) logIncomingText(terminal *telnet.Terminal, data telnet.IncomingTextData) {
-	l.logger.LogAttrs(context.Background(), l.config.IncomingTextLevel, "Received text", slog.String("contents", data.Text),
-		slog.String("lineEnding", data.LineEnding.String()), slog.Bool("overwritePrevious", data.OverwritePrevious))
+func (l *DebugLog) logPrinterOutput(terminal *telnet.Terminal, output telnet.PrinterOutput) {
+	switch o := output.(type) {
+	case telnet.CommandOutput:
+		l.logger.LogAttrs(context.Background(), l.config.IncomingCommandLevel, "Received command", slog.String("command", o.EscapedString(terminal)))
+	default:
+		l.logger.LogAttrs(context.Background(), l.config.IncomingTextLevel, output.EscapedString(terminal))
+	}
 }
 
 func (l *DebugLog) logOutboundCommand(terminal *telnet.Terminal, c telnet.Command) {

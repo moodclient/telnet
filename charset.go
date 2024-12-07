@@ -8,21 +8,14 @@ import (
 
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/ianaindex"
+	"golang.org/x/text/transform"
 )
-
-// coder is an interface that applies to both charset encoders and decoders.
-// The full encoding.Encoder/encoding.Decoder interfaces have different methods,
-// but we only use the ones in this interface and it is useful in some cases to use
-// an encoder as a decoder.
-type coder interface {
-	Bytes(b []byte) ([]byte, error)
-}
 
 type currentCharset struct {
 	name string
 
-	encoder coder
-	decoder coder
+	encoder *encoding.Encoder
+	decoder transform.Transformer
 }
 
 // Charset represents the full encoding landscape for this terminal.  Terminals have
@@ -166,7 +159,11 @@ func (c *Charset) Encode(utf8Text string) ([]byte, error) {
 
 // Decode accepts a byte slice that is encoded in the printer's current encoding
 // and returns a string of UTF-8 text
-func (c *Charset) Decode(incomingText []byte) (string, error) {
+func (c *Charset) Decode(buffer []byte, incomingText []byte) (consumed int, buffered int, err error) {
+	if len(incomingText) == 0 {
+		return 0, 0, nil
+	}
+
 	var charset currentCharset
 
 	if c.usage == CharsetUsageAlways || c.binaryDecode.Load() {
@@ -181,13 +178,19 @@ func (c *Charset) Decode(incomingText []byte) (string, error) {
 		charset = c.defaultCharset
 	}
 
-	b, err := charset.decoder.Bytes(incomingText)
-	if err != nil {
-		return "", err
+	for i := 0; i < len(incomingText); i++ {
+		var dstBytes, srcBytes int
+		dstBytes, srcBytes, err = charset.decoder.Transform(buffer, incomingText[:i+1], false)
+		if err != nil && !errors.Is(err, transform.ErrShortDst) && !errors.Is(err, transform.ErrShortSrc) {
+			return srcBytes, dstBytes, err
+		}
+
+		if dstBytes > 0 {
+			return srcBytes, dstBytes, nil
+		}
 	}
 
-	str := string(b)
-	return strings.TrimSuffix(str, "\ufffd"), nil
+	return 0, 0, err
 }
 
 func (c *Charset) buildCharset(codePage string) (currentCharset, error) {
@@ -216,7 +219,7 @@ func (c *Charset) buildCharset(codePage string) (currentCharset, error) {
 	}
 
 	encoder := charset.NewEncoder()
-	var decoder coder
+	var decoder transform.Transformer
 
 	if strings.ToLower(codePage) == "us-ascii" {
 		// Allow the remote to send us UTF-8 even if we think we're ascii. We'll be good citizens

@@ -9,19 +9,17 @@ type eventType byte
 const (
 	eventUnknown eventType = iota
 	eventError
-	eventCommand
-	eventText
+	eventPrinterOutput
 	eventOutboundCommand
 	eventOutboundText
 )
 
 type eventsTransport struct {
-	eventType      eventType
-	err            error
-	command        Command
-	text           string
-	textOverwrite  bool
-	textLineEnding LineEnding
+	eventType eventType
+	err       error
+	command   Command
+	text      string
+	output    PrinterOutput
 }
 
 type terminalEventPump struct {
@@ -38,10 +36,8 @@ func (p *terminalEventPump) processEvent(terminal *Terminal, event eventsTranspo
 	switch event.eventType {
 	case eventError:
 		terminal.encounteredError(event.err)
-	case eventCommand:
-		terminal.encounteredCommand(event.command)
-	case eventText:
-		terminal.encounteredText(event.text, event.textLineEnding, event.textOverwrite)
+	case eventPrinterOutput:
+		terminal.encounteredPrinterOutput(event.output)
 	case eventOutboundText:
 		terminal.sentText(event.text)
 	case eventOutboundCommand:
@@ -79,19 +75,10 @@ func (p *terminalEventPump) EncounteredError(err error) {
 	}
 }
 
-func (p *terminalEventPump) EncounteredCommand(command Command) {
+func (p *terminalEventPump) EncounteredPrinterOutput(output PrinterOutput) {
 	p.events <- eventsTransport{
-		eventType: eventCommand,
-		command:   command,
-	}
-}
-
-func (p *terminalEventPump) EncounteredText(text string, lineEnding LineEnding, overwrite bool) {
-	p.events <- eventsTransport{
-		eventType:      eventText,
-		text:           text,
-		textOverwrite:  overwrite,
-		textLineEnding: lineEnding,
+		eventType: eventPrinterOutput,
+		output:    output,
 	}
 }
 

@@ -21,13 +21,8 @@ func encounteredError(t *telnet.Terminal, err error) {
 	fmt.Println(err)
 }
 
-func incomingText(t *telnet.Terminal, data telnet.IncomingTextData) {
-	if data.OverwritePrevious {
-		// Rewrite line
-		fmt.Print(string('\r'))
-	}
-
-	fmt.Print(data.Text)
+func printerOutput(t *telnet.Terminal, output telnet.PrinterOutput) {
+	fmt.Print(output.String())
 }
 
 func main() {
@@ -75,7 +70,7 @@ func main() {
 			}),
 		},
 		EventHooks: telnet.EventHooks{
-			IncomingText:     []telnet.IncomingTextEvent{incomingText},
+			PrinterOutput:    []telnet.PrinterOutputEvent{printerOutput},
 			EncounteredError: []telnet.ErrorEvent{encounteredError},
 		},
 	})
@@ -121,5 +116,6 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	fmt.Println("\x1b[0m")
 	fmt.Println(logStore.String())
 }
