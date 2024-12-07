@@ -48,12 +48,13 @@ func main() {
 	defer cancel()
 
 	terminal, err := telnet.NewTerminal(ctx, conn, telnet.TerminalConfig{
-		Side:               telnet.SideClient,
-		DefaultCharsetName: "CP437",
+		Side:                telnet.SideClient,
+		DefaultCharsetName:  "US-ASCII",
+		FallbackCharsetName: "CP437",
 		TelOpts: []telnet.TelnetOption{
 			telopts.RegisterCHARSET(telnet.TelOptAllowLocal|telnet.TelOptAllowRemote, telopts.CHARSETConfig{
 				AllowAnyCharset:   true,
-				PreferredCharsets: []string{"CP437", "UTF-8", "US-ASCII"},
+				PreferredCharsets: []string{"UTF-8", "US-ASCII"},
 			}),
 			telopts.RegisterTRANSMITBINARY(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
 			telopts.RegisterEOR(telnet.TelOptAllowRemote | telnet.TelOptAllowLocal),
@@ -91,13 +92,15 @@ func main() {
 	}()
 
 	logStore := bytes.NewBuffer(nil)
-	logHandler := slog.New(slog.NewTextHandler(logStore, nil))
+	logHandler := slog.New(slog.NewTextHandler(logStore, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
 	_ = utils.NewDebugLog(terminal, logHandler, utils.DebugLogConfig{
 		EncounteredErrorLevel:  slog.LevelError,
 		IncomingCommandLevel:   slog.LevelInfo,
-		IncomingTextLevel:      utils.LevelNone,
+		IncomingTextLevel:      slog.LevelDebug,
 		OutboundCommandLevel:   slog.LevelInfo,
-		OutboundTextLevel:      utils.LevelNone,
+		OutboundTextLevel:      slog.LevelDebug,
 		TelOptEventLevel:       slog.LevelDebug,
 		TelOptStageChangeLevel: slog.LevelDebug,
 	})

@@ -47,7 +47,7 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context, terminal *Terminal) {
 				}
 			}
 
-			break
+			p.eventPump.EncounteredError(p.scanner.Err())
 		} else if ctx.Err() != nil {
 			break
 		}

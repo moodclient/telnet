@@ -20,6 +20,7 @@ type TelnetScanner struct {
 
 	charset       *Charset
 	ansiParser    *ansi.Parser
+	atEOF         bool
 	bytesToDecode []byte
 
 	err         error
@@ -109,6 +110,10 @@ func (s *TelnetScanner) processDanglingBytes() {
 		}
 
 		if errors.Is(err, transform.ErrShortSrc) {
+			if s.atEOF {
+				tmpBytesSlice = tmpBytesSlice[:0]
+			}
+
 			return
 		} else if err != nil {
 			s.err = err
@@ -152,6 +157,7 @@ func (s *TelnetScanner) Scan(ctx context.Context) bool {
 	}
 
 	for ctx.Err() == nil && s.cancellableScan(ctx) {
+		s.atEOF = false
 		s.err = s.scanner.Err()
 
 		bytes := s.scanner.Bytes()
@@ -178,8 +184,9 @@ func (s *TelnetScanner) Scan(ctx context.Context) bool {
 		}
 	}
 
+	s.atEOF = true
 	s.err = s.scanner.Err()
-	return false
+	return len(s.bytesToDecode) > 0
 }
 
 func (s *TelnetScanner) cancellableScan(ctx context.Context) bool {
