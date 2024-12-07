@@ -9,9 +9,10 @@ import (
 )
 
 type keyboardTransport struct {
-	text     string
-	command  Command
-	postSend func() error
+	text          string
+	command       Command
+	promptCommand bool
+	postSend      func() error
 }
 
 // TelnetKeyboard is a Terminal subsidiary that is in charge of sending outbound data
@@ -129,6 +130,18 @@ func (k *TelnetKeyboard) write(transport keyboardTransport) bool {
 	var err error
 	if transport.command.OpCode != 0 {
 		err = k.writeCommand(transport.command)
+	} else if transport.promptCommand {
+		prompts := k.promptCommands.Get()
+
+		if prompts&PromptCommandEOR != 0 {
+			err = k.writeCommand(Command{
+				OpCode: EOR,
+			})
+		} else if prompts&PromptCommandGA != 0 {
+			err = k.writeCommand(Command{
+				OpCode: GA,
+			})
+		}
 	} else {
 		err = k.writeText(transport.text)
 	}
@@ -162,7 +175,7 @@ keyboardLoop:
 		case <-ctx.Done():
 			break keyboardLoop
 		case input := <-k.input:
-			if input.command.OpCode != 0 && input.command.OpCode != GA && input.command.OpCode != EOR {
+			if input.command.OpCode != 0 {
 				if !k.write(input) {
 					break keyboardLoop
 				}
@@ -211,8 +224,7 @@ keyboardLoop:
 	for !anyWriteFailed {
 		select {
 		case input := <-k.input:
-			if !k.lock.IsLocked() ||
-				(input.command.OpCode != 0 && input.command.OpCode != GA && input.command.OpCode != EOR) {
+			if !k.lock.IsLocked() || input.command.OpCode != 0 {
 				if !k.write(input) {
 					anyWriteFailed = true
 					continue
@@ -281,15 +293,7 @@ func (k *TelnetKeyboard) ClearPromptCommand(flag PromptCommands) {
 // it will send a GA if it isn't being suppressed. If it is not valid to
 // send either prompt hint, this method will do nothing.
 func (k *TelnetKeyboard) SendPromptHint() {
-	prompts := k.promptCommands.Get()
-
-	if prompts&PromptCommandEOR != 0 {
-		k.WriteCommand(Command{
-			OpCode: EOR,
-		}, nil)
-	} else if prompts&PromptCommandGA != 0 {
-		k.WriteCommand(Command{
-			OpCode: GA,
-		}, nil)
+	k.input <- keyboardTransport{
+		promptCommand: true,
 	}
 }
