@@ -29,7 +29,7 @@ func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEv
 	keyboard := &TelnetKeyboard{
 		charset:      charset,
 		outputStream: output,
-		input:        make(chan keyboardTransport, 10),
+		input:        make(chan keyboardTransport, 100),
 		complete:     make(chan bool, 1),
 		eventPump:    eventPump,
 		lock:         newKeyboardLock(),
