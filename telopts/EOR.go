@@ -17,32 +17,32 @@ type EOR struct {
 	BaseTelOpt
 }
 
-func (o *EOR) TransitionLocalState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionLocalState(newState)
+func (o *EOR) TransitionLocalState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptRequested {
 		o.Terminal().Keyboard().SetLock(eorKeyboardLock, telnet.DefaultKeyboardLock)
+		return postSend, nil
+	}
+
+	return func() error {
+		if newState == telnet.TelOptActive {
+			o.Terminal().Keyboard().SetPromptCommand(telnet.PromptCommandEOR)
+		} else if newState == telnet.TelOptInactive {
+			o.Terminal().Keyboard().ClearPromptCommand(telnet.PromptCommandEOR)
+		}
+		o.Terminal().Keyboard().ClearLock(eorKeyboardLock)
 		return nil
-	}
-
-	o.Terminal().Keyboard().ClearLock(eorKeyboardLock)
-
-	if newState == telnet.TelOptActive {
-		o.Terminal().Keyboard().SetPromptCommand(telnet.PromptCommandEOR)
-	} else if newState == telnet.TelOptInactive {
-		o.Terminal().Keyboard().ClearPromptCommand(telnet.PromptCommandEOR)
-	}
-
-	return nil
+	}, nil
 }
 
-func (o *EOR) TransitionRemoteState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionRemoteState(newState)
+func (o *EOR) TransitionRemoteState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptActive {
@@ -51,5 +51,5 @@ func (o *EOR) TransitionRemoteState(newState telnet.TelOptState) error {
 		o.Terminal().Printer().ClearPromptCommand(telnet.PromptCommandEOR)
 	}
 
-	return nil
+	return postSend, nil
 }

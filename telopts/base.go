@@ -63,15 +63,15 @@ func (o *BaseTelOpt) Terminal() *telnet.Terminal {
 	return o.terminal
 }
 
-func (o *BaseTelOpt) TransitionLocalState(newState telnet.TelOptState) error {
+func (o *BaseTelOpt) TransitionLocalState(newState telnet.TelOptState) (func() error, error) {
 	atomic.StoreUint32(&o.localState, uint32(newState))
 
-	return nil
+	return nil, nil
 }
 
-func (o *BaseTelOpt) TransitionRemoteState(newState telnet.TelOptState) error {
+func (o *BaseTelOpt) TransitionRemoteState(newState telnet.TelOptState) (func() error, error) {
 	atomic.StoreUint32(&o.remoteState, uint32(newState))
-	return nil
+	return nil, nil
 }
 
 func (o *BaseTelOpt) Subnegotiate(subnegotiation []byte) error {

@@ -87,10 +87,10 @@ type NEWENVIRON struct {
 	remoteWellKnownVars map[string]string
 }
 
-func (o *NEWENVIRON) TransitionRemoteState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionRemoteState(newState)
+func (o *NEWENVIRON) TransitionRemoteState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptInactive {
@@ -111,7 +111,7 @@ func (o *NEWENVIRON) TransitionRemoteState(newState telnet.TelOptState) error {
 		o.writeSendAll()
 	}
 
-	return nil
+	return postSend, nil
 }
 
 func (o *NEWENVIRON) encodeText(buffer *bytes.Buffer, text string) {
@@ -173,7 +173,7 @@ func (o *NEWENVIRON) writeSendAll() {
 		OpCode:         telnet.SB,
 		Option:         newenviron,
 		Subnegotiation: buffer.Bytes(),
-	})
+	}, nil)
 }
 
 func (o *NEWENVIRON) writeVarValues(buffer *bytes.Buffer, varKeys map[string]struct{}, userVarKeys map[string]struct{}) {
@@ -267,7 +267,7 @@ func (o *NEWENVIRON) subnegotiateSEND(subnegotiation []byte) {
 		OpCode:         telnet.SB,
 		Option:         newenviron,
 		Subnegotiation: buffer.Bytes(),
-	})
+	}, nil)
 }
 
 func (o *NEWENVIRON) subnegotiationLoadValues(subnegotiation []byte) ([]string, []string, error) {
@@ -484,7 +484,7 @@ func (o *NEWENVIRON) SetVars(keysAndValues ...string) error {
 			OpCode:         telnet.SB,
 			Option:         newenviron,
 			Subnegotiation: buffer.Bytes(),
-		})
+		}, nil)
 	}
 
 	return nil
@@ -521,7 +521,7 @@ func (o *NEWENVIRON) ClearVars(keys ...string) {
 			OpCode:         telnet.SB,
 			Option:         newenviron,
 			Subnegotiation: buffer.Bytes(),
-		})
+		}, nil)
 	}
 }
 

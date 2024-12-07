@@ -98,12 +98,12 @@ func (o *CHARSET) writeRequest(charSets []string) error {
 		OpCode:         telnet.SB,
 		Option:         charset,
 		Subnegotiation: subnegotiation.Bytes(),
-	})
+	}, nil)
 
 	return nil
 }
 
-func (o *CHARSET) writeAccept(acceptedCharset string) {
+func (o *CHARSET) writeAccept(acceptedCharset string, postSend func() error) {
 	subnegotiation := make([]byte, 0, len(acceptedCharset)+1)
 	subnegotiation = append(subnegotiation, charsetACCEPTED)
 	subnegotiation = append(subnegotiation, []byte(acceptedCharset)...)
@@ -112,7 +112,7 @@ func (o *CHARSET) writeAccept(acceptedCharset string) {
 		OpCode:         telnet.SB,
 		Option:         charset,
 		Subnegotiation: subnegotiation,
-	})
+	}, postSend)
 }
 
 func (o *CHARSET) writeReject() {
@@ -120,26 +120,26 @@ func (o *CHARSET) writeReject() {
 		OpCode:         telnet.SB,
 		Option:         charset,
 		Subnegotiation: []byte{charsetREJECTED},
-	})
+	}, nil)
 }
 
-func (o *CHARSET) TransitionRemoteState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionLocalState(newState)
+func (o *CHARSET) TransitionRemoteState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptInactive {
 		o.bestRemoteEncoding = ""
 	}
 
-	return nil
+	return postSend, nil
 }
 
-func (o *CHARSET) TransitionLocalState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionLocalState(newState)
+func (o *CHARSET) TransitionLocalState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptInactive {
@@ -147,17 +147,19 @@ func (o *CHARSET) TransitionLocalState(newState telnet.TelOptState) error {
 	}
 
 	if newState != telnet.TelOptActive {
-		return nil
+		return postSend, nil
 	}
 
 	// Send REQUEST- if we don't have any preferred charsets we don't care so we won't
 	// send anything
 	if len(o.options.PreferredCharsets) > 0 {
 		o.Terminal().Keyboard().SetLock(charsetKeyboardLock, telnet.DefaultKeyboardLock)
-		return o.writeRequest(o.options.PreferredCharsets)
+
+		// Send subnegotiation immediately after accepting
+		return nil, o.writeRequest(o.options.PreferredCharsets)
 	}
 
-	return nil
+	return postSend, nil
 }
 
 func (o *CHARSET) isAcceptableCharset(charSet string) bool {
@@ -233,17 +235,15 @@ func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
 	}
 
 	// We have no reason not to accept the encoding
-	err := o.Terminal().Charset().SetNegotiatedCharset(o.bestRemoteEncoding)
-	if err != nil {
-		o.writeReject()
-		return err
-	}
+	o.writeAccept(o.bestRemoteEncoding, func() error {
+		return o.Terminal().Charset().SetNegotiatedCharset(o.bestRemoteEncoding)
+	})
+
 	o.Terminal().RaiseTelOptEvent(CHARSETNegotiationSuccessEvent{
 		BaseTelOptEvent: BaseTelOptEvent{o},
 		NewCharsetName:  o.bestRemoteEncoding,
 	})
 
-	o.writeAccept(o.bestRemoteEncoding)
 	return nil
 }
 

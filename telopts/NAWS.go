@@ -47,13 +47,13 @@ func (o *NAWS) writeSizeSubnegotiation(width, height int) {
 			byte((height >> 8) & 0xff),
 			byte(height & 0xff),
 		},
-	})
+	}, nil)
 }
 
-func (o *NAWS) TransitionLocalState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionLocalState(newState)
+func (o *NAWS) TransitionLocalState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptActive {
@@ -67,7 +67,7 @@ func (o *NAWS) TransitionLocalState(newState telnet.TelOptState) error {
 		}
 	}
 
-	return nil
+	return postSend, nil
 }
 
 func (o *NAWS) storeRemoteSize(width, height int) {

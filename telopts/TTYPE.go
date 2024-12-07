@@ -51,7 +51,7 @@ func (o *TTYPE) writeRequestSend() {
 		OpCode:         telnet.SB,
 		Option:         ttype,
 		Subnegotiation: []byte{ttypeSEND},
-	})
+	}, nil)
 }
 
 func (o *TTYPE) writeTerminal(terminal string) {
@@ -63,26 +63,26 @@ func (o *TTYPE) writeTerminal(terminal string) {
 		OpCode:         telnet.SB,
 		Option:         ttype,
 		Subnegotiation: terminalBytes,
-	})
+	}, nil)
 }
 
-func (o *TTYPE) TransitionLocalState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionLocalState(newState)
+func (o *TTYPE) TransitionLocalState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptInactive {
 		o.localTerminalCursor = 0
 	}
 
-	return nil
+	return postSend, nil
 }
 
-func (o *TTYPE) TransitionRemoteState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionRemoteState(newState)
+func (o *TTYPE) TransitionRemoteState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptInactive {
@@ -91,7 +91,7 @@ func (o *TTYPE) TransitionRemoteState(newState telnet.TelOptState) error {
 
 		o.remoteTerminals = nil
 
-		return nil
+		return postSend, nil
 	} else if newState == telnet.TelOptActive {
 		// If we didn't request to use TTYPE but the client did, start blocking outbound until we harvest
 		// all the info we want
@@ -104,13 +104,13 @@ func (o *TTYPE) TransitionRemoteState(newState telnet.TelOptState) error {
 
 		o.writeRequestSend()
 
-		return nil
+		return postSend, nil
 	} else if newState == telnet.TelOptRequested {
 		// Start blocking outbound when we request to use TTYPE until we harvest all the info we want
 		o.Terminal().Keyboard().SetLock(ttypeKeyboardLock, telnet.DefaultKeyboardLock)
 	}
 
-	return nil
+	return postSend, nil
 }
 
 func (o *TTYPE) SubnegotiationString(subnegotiation []byte) (string, error) {

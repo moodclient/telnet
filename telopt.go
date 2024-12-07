@@ -66,12 +66,12 @@ type TelnetOption interface {
 	// locally.  This is not called when the option is initialized to Inactive at the start of a new
 	// terminal, and it will not be called if the terminal tries to repeatedly transition this option
 	// to the same state.
-	TransitionLocalState(newState TelOptState) error
+	TransitionLocalState(newState TelOptState) (func() error, error)
 	// TransitionRemoteState is calledw hen the terminal attempts to change this option to a new state
 	// for the remote.  This is not called when the option is initialized to Inactive at the start of
 	// a new terminal, and it will nto be called if the terminal tries to repeatedly transition this
 	// option to the same state
-	TransitionRemoteState(newState TelOptState) error
+	TransitionRemoteState(newState TelOptState) (func() error, error)
 
 	// Subnegotiate is called when a subnegotiation request arrives from the remote party. This will only
 	// be called when the option is active on at least one side of the connection

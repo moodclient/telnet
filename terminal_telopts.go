@@ -21,50 +21,45 @@ func (t *Terminal) initTelopts(options []TelnetOption) error {
 func (t *Terminal) writeTelOptRequests() error {
 	for _, option := range t.options {
 		usage := option.Usage()
-		if usage&telOptOnlyRequestLocal != 0 {
+		oldLocalState := option.LocalState()
+		oldRemoteState := option.RemoteState()
+
+		if usage&telOptOnlyRequestLocal != 0 && oldLocalState == TelOptInactive {
+			postSend, err := option.TransitionLocalState(TelOptRequested)
+			if err != nil {
+				return err
+			}
+
 			t.keyboard.WriteCommand(Command{
 				OpCode: WILL,
 				Option: option.Code(),
+			}, postSend)
+
+			t.RaiseTelOptEvent(TelOptStateChangeEvent{
+				TelnetOption: option,
+				Side:         TelOptSideLocal,
+				OldState:     oldLocalState,
+				NewState:     TelOptRequested,
 			})
-
-			oldState := option.LocalState()
-
-			if oldState == TelOptInactive {
-				err := option.TransitionLocalState(TelOptRequested)
-				if err != nil {
-					return err
-				}
-
-				t.RaiseTelOptEvent(TelOptStateChangeEvent{
-					TelnetOption: option,
-					Side:         TelOptSideLocal,
-					OldState:     oldState,
-					NewState:     TelOptRequested,
-				})
-			}
 		}
 
-		if usage&telOptOnlyRequestRemote != 0 {
+		if usage&telOptOnlyRequestRemote != 0 && oldRemoteState == TelOptInactive {
+			postSend, err := option.TransitionRemoteState(TelOptRequested)
+			if err != nil {
+				return err
+			}
+
 			t.keyboard.WriteCommand(Command{
 				OpCode: DO,
 				Option: option.Code(),
+			}, postSend)
+
+			t.RaiseTelOptEvent(TelOptStateChangeEvent{
+				TelnetOption: option,
+				Side:         TelOptSideRemote,
+				OldState:     oldRemoteState,
+				NewState:     TelOptRequested,
 			})
-
-			oldState := option.RemoteState()
-
-			if oldState == TelOptInactive {
-				err := option.TransitionRemoteState(TelOptRequested)
-				if err != nil {
-					return err
-				}
-
-				t.RaiseTelOptEvent(TelOptStateChangeEvent{
-					TelnetOption: option,
-					Side:         TelOptSideRemote,
-					OldState:     oldState,
-					NewState:     TelOptRequested,
-				})
-			}
 		}
 	}
 
@@ -73,7 +68,7 @@ func (t *Terminal) writeTelOptRequests() error {
 
 func (t *Terminal) rejectNegotiationRequest(c Command) {
 	if c.isActivateNegotiation() {
-		t.keyboard.WriteCommand(c.reject())
+		t.keyboard.WriteCommand(c.reject(), nil)
 	}
 }
 
@@ -128,9 +123,13 @@ func (t *Terminal) processTelOptCommand(c Command) error {
 		return nil
 	} else if !c.isActivateNegotiation() {
 		// need to turn it off
-		err := transitionFunc(TelOptInactive)
+		postSend, err := transitionFunc(TelOptInactive)
 		if err != nil {
 			return err
+		}
+
+		if oldState == TelOptActive {
+			t.keyboard.WriteCommand(c.agree(), postSend)
 		}
 
 		t.RaiseTelOptEvent(TelOptStateChangeEvent{
@@ -156,14 +155,14 @@ func (t *Terminal) processTelOptCommand(c Command) error {
 		return nil
 	}
 
-	if oldState == TelOptInactive {
-		// Need to send an accept command
-		t.keyboard.WriteCommand(c.accept())
-	}
-
-	err := transitionFunc(TelOptActive)
+	postSend, err := transitionFunc(TelOptActive)
 	if err != nil {
 		return err
+	}
+
+	if oldState == TelOptInactive {
+		// Need to send an accept command
+		t.keyboard.WriteCommand(c.agree(), postSend)
 	}
 
 	t.RaiseTelOptEvent(TelOptStateChangeEvent{

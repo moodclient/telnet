@@ -95,15 +95,19 @@ func (c Command) reject() Command {
 	return Command{OpCode: newOpCode, Option: c.Option}
 }
 
-// accept produces a new command accepting this one (WILL/DO) if this command is
-// an activate negotiation command (DO/WILL)
-func (c Command) accept() Command {
+// accept produces a new command agreeing this one (WILL/DO/WONT/DONT) if this command is
+// a negotiation command (DO/WILL/DONT/WONT)
+func (c Command) agree() Command {
 	var newOpCode byte
 	switch c.OpCode {
 	case DO:
 		newOpCode = WILL
 	case WILL:
 		newOpCode = DO
+	case DONT:
+		newOpCode = WONT
+	case WONT:
+		newOpCode = DONT
 	default:
 		return Command{OpCode: NOP}
 	}

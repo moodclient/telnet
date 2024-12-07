@@ -23,7 +23,7 @@ type keyboardLock struct {
 func newKeyboardLock() *keyboardLock {
 	lock := &keyboardLock{
 		locks: make(map[string]time.Time),
-		C:     make(chan struct{}),
+		C:     make(chan struct{}, 1),
 	}
 
 	timer := time.AfterFunc(0, func() {
@@ -41,7 +41,12 @@ func newKeyboardLock() *keyboardLock {
 func (l *keyboardLock) timerExpire() {
 	// The keyboard is now unlocked
 	l.locked = false
-	l.C <- struct{}{}
+
+	select {
+	case l.C <- struct{}{}:
+	default:
+	}
+
 }
 
 func (l *keyboardLock) newNextExpiry(expiry time.Time) {

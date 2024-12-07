@@ -17,27 +17,28 @@ type TRANSMITBINARY struct {
 	BaseTelOpt
 }
 
-func (o *TRANSMITBINARY) TransitionLocalState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionLocalState(newState)
+func (o *TRANSMITBINARY) TransitionLocalState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptRequested {
 		o.Terminal().Keyboard().SetLock(transmitbinaryKeyboardLock, telnet.DefaultKeyboardLock)
-		return nil
+		return postSend, nil
 	}
 
-	o.Terminal().Keyboard().ClearLock(transmitbinaryKeyboardLock)
-	o.Terminal().Charset().SetBinaryEncode(newState == telnet.TelOptActive)
-
-	return nil
+	return func() error {
+		o.Terminal().Charset().SetBinaryEncode(newState == telnet.TelOptActive)
+		o.Terminal().Keyboard().ClearLock(transmitbinaryKeyboardLock)
+		return nil
+	}, nil
 }
 
-func (o *TRANSMITBINARY) TransitionRemoteState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionRemoteState(newState)
+func (o *TRANSMITBINARY) TransitionRemoteState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptActive {
@@ -46,5 +47,5 @@ func (o *TRANSMITBINARY) TransitionRemoteState(newState telnet.TelOptState) erro
 		o.Terminal().Charset().SetBinaryDecode(false)
 	}
 
-	return nil
+	return postSend, nil
 }

@@ -9,8 +9,9 @@ import (
 )
 
 type keyboardTransport struct {
-	text    string
-	command Command
+	text     string
+	command  Command
+	postSend func() error
 }
 
 // TelnetKeyboard is a Terminal subsidiary that is in charge of sending outbound data
@@ -125,11 +126,18 @@ func (k *TelnetKeyboard) writeText(text string) error {
 }
 
 func (k *TelnetKeyboard) write(transport keyboardTransport) bool {
+	var err error
 	if transport.command.OpCode != 0 {
-		return k.handleError(k.writeCommand(transport.command))
+		err = k.writeCommand(transport.command)
+	} else {
+		err = k.writeText(transport.text)
 	}
 
-	return k.handleError(k.writeText(transport.text))
+	if err == nil && transport.postSend != nil {
+		err = transport.postSend()
+	}
+
+	return k.handleError(err)
 }
 
 func (k *TelnetKeyboard) handleError(err error) bool {
@@ -175,14 +183,17 @@ keyboardLoop:
 			}
 
 		case <-k.lock.C:
-			// Write all queued text
-			for _, singleWrite := range queuedWrites {
-				if !k.write(singleWrite) {
-					break keyboardLoop
+			// Make sure the lock hasn't unlocked & relocked in the time we've been away
+			if !k.lock.IsLocked() {
+				// Write all queued text
+				for _, singleWrite := range queuedWrites {
+					if !k.write(singleWrite) {
+						break keyboardLoop
+					}
 				}
-			}
 
-			queuedWrites = queuedWrites[:0]
+				queuedWrites = queuedWrites[:0]
+			}
 		}
 	}
 
@@ -225,9 +236,10 @@ func (k *TelnetKeyboard) encounteredError(err error) {
 }
 
 // WriteCommand will queue a command to be sent to the remote
-func (k *TelnetKeyboard) WriteCommand(c Command) {
+func (k *TelnetKeyboard) WriteCommand(c Command, postSend func() error) {
 	k.input <- keyboardTransport{
-		command: c,
+		command:  c,
+		postSend: postSend,
 	}
 }
 
@@ -274,10 +286,10 @@ func (k *TelnetKeyboard) SendPromptHint() {
 	if prompts&PromptCommandEOR != 0 {
 		k.WriteCommand(Command{
 			OpCode: EOR,
-		})
+		}, nil)
 	} else if prompts&PromptCommandGA != 0 {
 		k.WriteCommand(Command{
 			OpCode: GA,
-		})
+		}, nil)
 	}
 }

@@ -36,10 +36,10 @@ type SENDLOCATION struct {
 	remoteLocation atomic.Value
 }
 
-func (o *SENDLOCATION) TransitionLocalState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionLocalState(newState)
+func (o *SENDLOCATION) TransitionLocalState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionLocalState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptActive {
@@ -47,23 +47,23 @@ func (o *SENDLOCATION) TransitionLocalState(newState telnet.TelOptState) error {
 			OpCode:         telnet.SB,
 			Option:         sendlocation,
 			Subnegotiation: []byte(o.localLocation.Load().(string)),
-		})
+		}, nil)
 	}
 
-	return nil
+	return postSend, nil
 }
 
-func (o *SENDLOCATION) TransitionRemoteState(newState telnet.TelOptState) error {
-	err := o.BaseTelOpt.TransitionRemoteState(newState)
+func (o *SENDLOCATION) TransitionRemoteState(newState telnet.TelOptState) (func() error, error) {
+	postSend, err := o.BaseTelOpt.TransitionRemoteState(newState)
 	if err != nil {
-		return err
+		return postSend, err
 	}
 
 	if newState == telnet.TelOptInactive {
 		o.remoteLocation.Store("")
 	}
 
-	return nil
+	return postSend, nil
 }
 
 func (o *SENDLOCATION) Subnegotiate(subnegotiation []byte) error {
@@ -89,7 +89,7 @@ func (o *SENDLOCATION) SetLocalLocation(location string) {
 		OpCode:         telnet.SB,
 		Option:         sendlocation,
 		Subnegotiation: []byte(location),
-	})
+	}, nil)
 }
 
 func (o *SENDLOCATION) RemoteLocation() string {
