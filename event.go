@@ -28,7 +28,7 @@ type terminalEventPump struct {
 
 func newEventPump() *terminalEventPump {
 	return &terminalEventPump{
-		events: make(chan eventsTransport, 10),
+		events: make(chan eventsTransport, 100),
 	}
 }
 
