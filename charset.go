@@ -3,7 +3,6 @@ package telnet
 import (
 	"errors"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"unicode"
 	"unicode/utf8"
@@ -44,13 +43,10 @@ type Charset struct {
 	binaryEncode atomic.Bool
 	binaryDecode atomic.Bool
 
-	defaultLock    sync.Mutex
-	defaultCharset currentCharset
-
-	negotiatedLock sync.Mutex
-	negotiated     currentCharset
-
-	fallback *currentCharset
+	defaultCharset     atomic.Pointer[currentCharset]
+	negotiatedEncoding atomic.Pointer[currentCharset]
+	negotiatedDecoding atomic.Pointer[currentCharset]
+	fallback           atomic.Pointer[currentCharset]
 }
 
 // NewCharset creates a new charset with a default charset & a CharsetUsage to decide
@@ -65,8 +61,9 @@ func NewCharset(defaultCodePage string, fallbackCodePage string, usage CharsetUs
 		return nil, err
 	}
 
-	charset.defaultCharset = defaultCharset
-	charset.negotiated = defaultCharset
+	charset.defaultCharset.Store(defaultCharset)
+	charset.negotiatedDecoding.Store(defaultCharset)
+	charset.negotiatedEncoding.Store(defaultCharset)
 
 	if fallbackCodePage != "" {
 		fallback, err := charset.buildCharset(fallbackCodePage)
@@ -74,7 +71,7 @@ func NewCharset(defaultCodePage string, fallbackCodePage string, usage CharsetUs
 			return nil, err
 		}
 
-		charset.fallback = &fallback
+		charset.fallback.Store(fallback)
 	}
 
 	return charset, nil
@@ -102,72 +99,55 @@ func (c *Charset) BinaryDecode() bool {
 	return c.binaryDecode.Load()
 }
 
-// NegotiatedCharsetName returns the name of the character set negotiated by the
-// CHARSET telopt. If the CHARSET telopt has not negotiated a charset, this will
-// return the name of the default charset
-func (c *Charset) NegotiatedCharsetName() string {
-	c.negotiatedLock.Lock()
-	defer c.negotiatedLock.Unlock()
+func (c *Charset) loadEncodingCharset() *currentCharset {
+	var charset *currentCharset
+	if c.usage == CharsetUsageAlways || c.binaryEncode.Load() {
+		charset = c.negotiatedEncoding.Load()
+	}
 
-	return c.negotiated.name
+	if charset == nil {
+		charset = c.defaultCharset.Load()
+	}
+
+	return charset
+}
+
+func (c *Charset) loadDecodingCharset() *currentCharset {
+	var charset *currentCharset
+	if c.usage == CharsetUsageAlways || c.binaryDecode.Load() {
+		charset = c.negotiatedDecoding.Load()
+	}
+
+	if charset == nil {
+		charset = c.defaultCharset.Load()
+	}
+
+	return charset
 }
 
 // DefaultCharsetName returns the name of the default character set
 func (c *Charset) DefaultCharsetName() string {
-	c.defaultLock.Lock()
-	defer c.defaultLock.Unlock()
-
-	return c.defaultCharset.name
+	return c.defaultCharset.Load().name
 }
 
 // EncodingName returns the name of the character set currently used by the keyboard.
 // This method takes into account the default & negotiated character sets, the CharsetUsage
 // value, and whether the keyboard is in binary mode
 func (c *Charset) EncodingName() string {
-	if c.usage == CharsetUsageAlways || c.binaryEncode.Load() {
-		c.negotiatedLock.Lock()
-		defer c.negotiatedLock.Unlock()
-
-		return c.negotiated.name
-	}
-
-	c.defaultLock.Lock()
-	defer c.defaultLock.Unlock()
-
-	return c.defaultCharset.name
+	return c.loadEncodingCharset().name
 }
 
 // DecodingName returns the name of the character set currently used by the printer.
 // This method takes into account the default & negotiated character sets, the
 // CharsetUsage value, and whether the printer is in binary mode
 func (c *Charset) DecodingName() string {
-	if c.usage == CharsetUsageAlways || c.binaryDecode.Load() {
-		c.negotiatedLock.Lock()
-		defer c.negotiatedLock.Unlock()
-
-		return c.negotiated.name
-	}
-
-	c.defaultLock.Lock()
-	defer c.defaultLock.Unlock()
-
-	return c.defaultCharset.name
+	return c.loadDecodingCharset().name
 }
 
 // Encode accepts a string of UTF-8 text and returns a byte slice that is encoded
 // in the keyboard's current encoding
 func (c *Charset) Encode(utf8Text string) ([]byte, error) {
-	if c.usage == CharsetUsageAlways || c.binaryEncode.Load() {
-		c.negotiatedLock.Lock()
-		defer c.negotiatedLock.Unlock()
-
-		return c.negotiated.encoder.Bytes([]byte(utf8Text))
-	}
-
-	c.defaultLock.Lock()
-	defer c.defaultLock.Unlock()
-
-	return c.defaultCharset.encoder.Bytes([]byte(utf8Text))
+	return c.loadEncodingCharset().encoder.Bytes([]byte(utf8Text))
 }
 
 func (c *Charset) attemptDecode(charset *currentCharset, buffer []byte, input []byte) (consumed int, buffered int, err error) {
@@ -192,53 +172,45 @@ func (c *Charset) Decode(buffer []byte, incomingText []byte) (consumed int, buff
 		return 0, 0, nil
 	}
 
-	var charset currentCharset
+	charset := c.loadDecodingCharset()
 
-	if c.usage == CharsetUsageAlways || c.binaryDecode.Load() {
-		c.negotiatedLock.Lock()
-		defer c.negotiatedLock.Unlock()
-
-		charset = c.negotiated
-	} else {
-		c.defaultLock.Lock()
-		defer c.defaultLock.Unlock()
-
-		charset = c.defaultCharset
-	}
-
-	consumed, buffered, err = c.attemptDecode(&charset, buffer, incomingText)
+	consumed, buffered, err = c.attemptDecode(charset, buffer, incomingText)
 	if err != nil {
 		return consumed, buffered, err
 	}
 
 	firstRune, _ := utf8.DecodeRune(buffer)
-	if c.fallback != nil && (buffered == 0 || firstRune == unicode.ReplacementChar) {
-		var fallbackBuffer [10]byte
-		fallbackConsumed, fallbackBuffered, fallbackErr := c.attemptDecode(c.fallback, fallbackBuffer[:], incomingText)
-		if fallbackErr != nil || fallbackBuffered == 0 {
-			// Use what we got the first time
-			return consumed, buffered, err
-		}
+	if buffered == 0 || firstRune == unicode.ReplacementChar {
+		fallback := c.fallback.Load()
 
-		firstFallbackRune, _ := utf8.DecodeRune(fallbackBuffer[:])
-		if firstFallbackRune == unicode.ReplacementChar {
-			// Use what we got the first time
-			return consumed, buffered, err
-		}
+		if fallback != nil {
+			var fallbackBuffer [10]byte
+			fallbackConsumed, fallbackBuffered, fallbackErr := c.attemptDecode(fallback, fallbackBuffer[:], incomingText)
+			if fallbackErr != nil || fallbackBuffered == 0 {
+				// Use what we got the first time
+				return consumed, buffered, err
+			}
 
-		// Use the fallback decoding
-		copy(buffer, fallbackBuffer[:])
-		return fallbackConsumed, fallbackBuffered, nil
+			firstFallbackRune, _ := utf8.DecodeRune(fallbackBuffer[:])
+			if firstFallbackRune == unicode.ReplacementChar {
+				// Use what we got the first time
+				return consumed, buffered, err
+			}
+
+			// Use the fallback decoding
+			copy(buffer, fallbackBuffer[:])
+			return fallbackConsumed, fallbackBuffered, nil
+		}
 	}
 
 	return consumed, buffered, err
 }
 
-func (c *Charset) buildCharset(codePage string) (currentCharset, error) {
+func (c *Charset) buildCharset(codePage string) (*currentCharset, error) {
 	if strings.ToLower(codePage) == "utf-8" {
 		// A utf-8 character set will replace bad runes with the replacement character
 		// but otherwise not touch the text
-		return currentCharset{
+		return &currentCharset{
 			encoder: encoding.Replacement.NewEncoder(),
 			// We use an encoder instead of decoder because the Replacement encoding works weird-
 			// see the difference between the decoder & encoder behaviors
@@ -249,14 +221,14 @@ func (c *Charset) buildCharset(codePage string) (currentCharset, error) {
 
 	charset, err := ianaindex.IANA.Encoding(codePage)
 	if err != nil {
-		return currentCharset{}, err
+		return nil, err
 	}
 	if charset == nil {
-		return currentCharset{}, errors.New("ianaindex: unsupported encoding")
+		return nil, errors.New("ianaindex: unsupported encoding")
 	}
 	name, err := ianaindex.IANA.Name(charset)
 	if err != nil {
-		return currentCharset{}, err
+		return nil, err
 	}
 
 	encoder := charset.NewEncoder()
@@ -270,7 +242,7 @@ func (c *Charset) buildCharset(codePage string) (currentCharset, error) {
 		decoder = charset.NewDecoder()
 	}
 
-	return currentCharset{
+	return &currentCharset{
 		encoder: encoder,
 		decoder: decoder,
 		name:    name,
@@ -287,10 +259,9 @@ func (c *Charset) buildCharset(codePage string) (currentCharset, error) {
 // always decode UTF-8, but it's useful for the consumer to know whether the remote
 // actually supports UTF-8, in order to decide whether to send things like emojis.
 func (c *Charset) PromoteDefaultCharset(oldCodePage string, newCodePage string) (bool, error) {
-	c.defaultLock.Lock()
-	defer c.defaultLock.Unlock()
+	defaultCharset := c.defaultCharset.Load()
 
-	if c.defaultCharset.name != oldCodePage {
+	if defaultCharset.name != oldCodePage {
 		return false, nil
 	}
 
@@ -299,27 +270,26 @@ func (c *Charset) PromoteDefaultCharset(oldCodePage string, newCodePage string) 
 		return false, err
 	}
 
-	c.negotiatedLock.Lock()
-	defer c.negotiatedLock.Unlock()
-
-	if c.negotiated.name == oldCodePage {
-		c.negotiated = charset
-	}
-
-	c.defaultCharset = charset
-	return true, nil
+	return c.defaultCharset.CompareAndSwap(defaultCharset, charset), nil
 }
 
 // SetNegotiatedCharset modifies the negotiated charset to the requested character set
-func (c *Charset) SetNegotiatedCharset(codePage string) error {
+func (c *Charset) SetNegotiatedEncodingCharset(codePage string) error {
 	charset, err := c.buildCharset(codePage)
 	if err != nil {
 		return err
 	}
 
-	c.negotiatedLock.Lock()
-	defer c.negotiatedLock.Unlock()
+	c.negotiatedEncoding.Store(charset)
+	return nil
+}
 
-	c.negotiated = charset
+func (c *Charset) SetNegotiatedDecodingCharset(codePage string) error {
+	charset, err := c.buildCharset(codePage)
+	if err != nil {
+		return err
+	}
+
+	c.negotiatedDecoding.Store(charset)
 	return nil
 }

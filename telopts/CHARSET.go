@@ -222,6 +222,7 @@ func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
 
 	if bestCharSet == "" {
 		o.writeReject()
+		o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
 		return nil
 	}
 
@@ -231,12 +232,21 @@ func (o *CHARSET) subnegotiateREQUEST(subnegotiation []byte) error {
 		// We have worked on a negotiation originating from local in the last 5 seconds
 		// and we are set up to demand priority for our negotiations, so reject the remote negotiation
 		o.writeReject()
+		o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
 		return nil
 	}
 
 	// We have no reason not to accept the encoding
+	err := o.Terminal().Charset().SetNegotiatedDecodingCharset(o.bestRemoteEncoding)
+	if err != nil {
+		o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
+		return err
+	}
+
 	o.writeAccept(o.bestRemoteEncoding, func() error {
-		return o.Terminal().Charset().SetNegotiatedCharset(o.bestRemoteEncoding)
+		err := o.Terminal().Charset().SetNegotiatedEncodingCharset(o.bestRemoteEncoding)
+		o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
+		return err
 	})
 
 	o.Terminal().RaiseTelOptEvent(CHARSETNegotiationSuccessEvent{
@@ -253,11 +263,13 @@ func (o *CHARSET) subnegotiateREJECTED() error {
 		return nil
 	}
 
-	if o.bestRemoteEncoding != "" && o.Terminal().Charset().NegotiatedCharsetName() != o.bestRemoteEncoding && o.Terminal().Side() == telnet.SideServer {
+	if o.bestRemoteEncoding != "" && o.Terminal().Side() == telnet.SideServer {
 		// The client rejected us but they did send us some preferences that we rejected due to having
 		// an active local negotiation- let's request that the client use it
-		o.Terminal().Keyboard().SetLock(charsetKeyboardLock, telnet.DefaultKeyboardLock)
-		return o.writeRequest([]string{o.bestRemoteEncoding})
+		if o.Terminal().Charset().EncodingName() != o.bestRemoteEncoding || o.Terminal().Charset().DecodingName() != o.bestRemoteEncoding {
+			o.Terminal().Keyboard().SetLock(charsetKeyboardLock, telnet.DefaultKeyboardLock)
+			return o.writeRequest([]string{o.bestRemoteEncoding})
+		}
 	}
 
 	o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
@@ -270,6 +282,12 @@ func (o *CHARSET) subnegotiateACCEPTED(subnegotiation []byte) error {
 		return nil
 	}
 
+	// Win or lose, this negotiation is over.  We'll want to clear the lock AFTER setting the
+	// new charset to ensure that no characters manage to slip out under the old charset
+	defer func() {
+		o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
+	}()
+
 	charSet := string(subnegotiation[1:])
 	if !o.isAcceptableCharset(charSet) {
 		return fmt.Errorf("charset: client sent ACCEPT for invalid charset %s", charSet)
@@ -277,10 +295,11 @@ func (o *CHARSET) subnegotiateACCEPTED(subnegotiation []byte) error {
 
 	o.bestRemoteEncoding = charSet
 
-	// Clear the lock after setting charset to ensure that all outbound text uses the new charset
-	// if we're going to change (we should clear the lock even if it fails since the negotiation
-	// will not continue)
-	err := o.Terminal().Charset().SetNegotiatedCharset(charSet)
+	err := o.Terminal().Charset().SetNegotiatedDecodingCharset(charSet)
+	if err != nil {
+		return err
+	}
+	err = o.Terminal().Charset().SetNegotiatedEncodingCharset(charSet)
 	if err != nil {
 		return err
 	}
@@ -299,19 +318,15 @@ func (o *CHARSET) Subnegotiate(subnegotiation []byte) error {
 	}
 
 	if subnegotiation[0] == charsetREQUEST {
-		err := o.subnegotiateREQUEST(subnegotiation)
-		o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
-		return err
+		return o.subnegotiateREQUEST(subnegotiation)
 	}
 
 	if subnegotiation[0] == charsetREJECTED {
-		// Depending on how we were rejected, we may keep the keyboard lock
 		return o.subnegotiateREJECTED()
 	}
 
 	if subnegotiation[0] == charsetACCEPTED {
 		err := o.subnegotiateACCEPTED(subnegotiation)
-		o.Terminal().Keyboard().ClearLock(charsetKeyboardLock)
 		return err
 	}
 
