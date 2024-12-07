@@ -173,7 +173,7 @@ func (s *TelnetScanner) Scan(ctx context.Context) bool {
 		s.flushText(textBuffer.String())
 		textBuffer.Reset()
 
-		if s.nextOutput != nil || err != nil {
+		if s.nextOutput != nil || s.err != nil {
 			return true
 		}
 	}
