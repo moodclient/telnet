@@ -178,6 +178,8 @@ func (c *Charset) Decode(buffer []byte, incomingText []byte, fallback bool) (con
 		consumed, buffered, err = c.attemptDecode(charset, buffer, incomingText)
 		if err != nil && !errors.Is(err, transform.ErrShortSrc) {
 			return consumed, buffered, fallback, err
+		} else if buffered == 0 && errors.Is(err, transform.ErrShortSrc) {
+			return consumed, buffered, fallback, err
 		}
 
 		firstRune, _ := utf8.DecodeRune(buffer)
