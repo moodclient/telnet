@@ -67,9 +67,9 @@ func (s *TelnetScanner) flushText(text string) {
 		s.outSequence = nil
 		return
 	} else if s.outCommand.OpCode == GA {
-		s.nextOutput = PromptOutput{Type: PromptGA}
+		s.nextOutput = PromptOutput{Type: PromptCommandGA}
 	} else if s.outCommand.OpCode == EOR {
-		s.nextOutput = PromptOutput{Type: PromptEOR}
+		s.nextOutput = PromptOutput{Type: PromptCommandEOR}
 	} else if s.outCommand.OpCode != 0 {
 		s.nextOutput = CommandOutput{Command: s.outCommand}
 	}

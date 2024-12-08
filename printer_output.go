@@ -33,16 +33,8 @@ func (o CommandOutput) EscapedString(terminal *Terminal) string {
 	return terminal.CommandString(o.Command)
 }
 
-type PromptType byte
-
-const (
-	PromptGA PromptType = iota
-	PromptEOR
-	PromptTimeout
-)
-
 type PromptOutput struct {
-	Type PromptType
+	Type PromptCommands
 }
 
 func (o PromptOutput) String() string {
@@ -51,12 +43,12 @@ func (o PromptOutput) String() string {
 
 func (o PromptOutput) EscapedString(terminal *Terminal) string {
 	switch o.Type {
-	case PromptGA:
+	case PromptCommandGA:
 		return "IAC GA"
-	case PromptEOR:
+	case PromptCommandEOR:
 		return "IAC EOR"
 	default:
-		return "<timeout>"
+		return "<???>"
 	}
 }
 

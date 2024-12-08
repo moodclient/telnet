@@ -30,10 +30,10 @@ func newTelnetPrinter(charset *Charset, inputStream io.Reader, eventPump *termin
 	return printer
 }
 
-func (p *TelnetPrinter) isSuppressedPromptCommand(t PromptType) bool {
+func (p *TelnetPrinter) isSuppressedPromptCommand(t PromptCommands) bool {
 	promptCommands := p.promptCommands.Get()
-	return (t == PromptGA && promptCommands&PromptCommandGA == 0) ||
-		(t == PromptEOR && promptCommands&PromptCommandEOR == 0)
+	return (t == PromptCommandGA && promptCommands&PromptCommandGA == 0) ||
+		(t == PromptCommandEOR && promptCommands&PromptCommandEOR == 0)
 }
 
 func (p *TelnetPrinter) printerLoop(ctx context.Context, terminal *Terminal) {
