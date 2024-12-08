@@ -55,7 +55,10 @@ type TerminalConfig struct {
 	// FallbackCharsetName can be left empty. If populated, it is the registered IANA name for
 	// a character set that will be used when the normal character decoding fails. If decoding
 	// a character from the printer results in the unicode replacement character, decoding will
-	// be retried using this character set. The results will kept regardless of success or failure.
+	// be retried using this character set. If decoding does not result in a unicode replacement
+	// character, the fallback character set will continue to be used until the next control code
+	// (including line break), command, or escape sequence, even if the fallback character set
+	// starts to fail during that time.
 	//
 	// This can be useful when connecting to BBS servers (or certain MUDs that act like them),
 	// because some use CP437 without any CHARSET negotiation at all. Since all bytes are valid

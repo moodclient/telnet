@@ -121,6 +121,28 @@ func (s TelOptState) String() string {
 	}
 }
 
+// TelOptSide is used to distinguish the two "sides" of a telopt.  Telopts can be active
+// on either the local side, the remote side, both, or neither.  As a result,
+// the current state of a telopt needs to be requested for a particular side of the connection.
+type TelOptSide byte
+
+const (
+	TelOptSideUnknown TelOptSide = iota
+	TelOptSideLocal
+	TelOptSideRemote
+)
+
+func (s TelOptSide) String() string {
+	switch s {
+	case TelOptSideLocal:
+		return "Local"
+	case TelOptSideRemote:
+		return "Remote"
+	default:
+		return "Unknown"
+	}
+}
+
 // TelOptEvent is an interface used for all TelOptEvents issued by anyone, both TelOptStateChangeEvent,
 // which is issued by this terminal, and other events issued by telopts themselves
 type TelOptEvent interface {

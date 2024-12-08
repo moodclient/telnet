@@ -20,13 +20,15 @@ type currentCharset struct {
 }
 
 // Charset represents the full encoding landscape for this terminal.  Terminals have
-// both a default charset and negotiated charset.  On terminal creation, the negotiated
-// charset is the same as the default charset.  Through the CHARSET telopt, a new
-// negotiated charset can be established with the remote.  However, according to the
-// RFC, the negotiated charset should only be used when TRANSMIT-BINARY is active. When
-// it is not active, the default charset should continue to be used. Not
-// all implementors follow that requirement, though, so CharsetUsage is used to establish
-// when the negotiated charset should be used.
+// both a default charset and separate negotiated charsets for encoding and decoding.
+// On terminal creation, the negotiated charsets are the same as the default charset.
+// Through the CHARSET telopt, a new negotiated charset can be established with the remote.
+// However, according to the RFC, the negotiated charset should only be used when
+//
+//	TRANSMIT-BINARY is active. When it is not active, the default charset should continue
+//
+// to be used. Not all implementors follow that requirement, though, so CharsetUsage is used
+// to establish when the negotiated charset should be used.
 //
 // Additionally, the RFC required the default charset to be US-ASCII prior to 2008 and
 // requires it to be UTF-8 since 2008. However, not all peers have been updated to support
@@ -38,6 +40,9 @@ type currentCharset struct {
 // Finally, some non-english services written prior to 2008 broke RFC and do not use
 // US-ASCII as their default charset.  So in some cases, we will establish a default
 // character set other than US-ASCII to support these services.
+//
+// Lastly, a fallback character set can be established that will be used during decoding
+// if the correct charset for decoding fails.
 type Charset struct {
 	usage        CharsetUsage
 	binaryEncode atomic.Bool
@@ -49,8 +54,9 @@ type Charset struct {
 	fallback           atomic.Pointer[currentCharset]
 }
 
-// NewCharset creates a new charset with a default charset & a CharsetUsage to decide
-// how the negotiated charset will be used if one is negotiated.
+// NewCharset creates a new charset with a default charset, an optional fallback charset,
+//
+//	& a CharsetUsage to decide how the negotiated charset will be used if one is negotiated.
 func NewCharset(defaultCodePage string, fallbackCodePage string, usage CharsetUsage) (*Charset, error) {
 	charset := &Charset{
 		usage: usage,
@@ -165,8 +171,14 @@ func (c *Charset) attemptDecode(charset *currentCharset, buffer []byte, input []
 	return consumed, buffered, err
 }
 
-// Decode accepts a byte slice that is encoded in the printer's current encoding
-// and returns a string of UTF-8 text
+// Decode accepts a byte slice that is encoded in the printer's current encoding as well as a
+// destination buffer for decoded bytes.  Additionally, it accepts a bool indicating whether
+// the decode process should skip the default/negotiated charset and immediately use the fallback
+// charset.
+//
+// The method returns how many bytes were consumed from the incoming text, how many bytes were
+// written to the buffer, whether the charset had to move to fallback mode due to decoding failure,
+// and potentially an error.
 func (c *Charset) Decode(buffer []byte, incomingText []byte, fallback bool) (consumed int, buffered int, fellback bool, err error) {
 	if len(incomingText) == 0 {
 		return 0, 0, fallback, nil
@@ -194,15 +206,24 @@ func (c *Charset) Decode(buffer []byte, incomingText []byte, fallback bool) (con
 		if fallbackCharset != nil {
 			var fallbackBuffer [10]byte
 			fallbackConsumed, fallbackBuffered, fallbackErr := c.attemptDecode(fallbackCharset, fallbackBuffer[:], incomingText)
-			if fallbackErr != nil || fallbackBuffered == 0 {
+			if buffered > 0 && (fallbackErr != nil || fallbackBuffered == 0) {
 				// Use what we got the first time
 				return consumed, buffered, false, err
+			} else if fallbackErr != nil && !errors.Is(fallbackErr, transform.ErrShortSrc) {
+				// We are committed to fallback mode already and received some sort of error
+				return fallbackConsumed, fallbackBuffered, true, fallbackErr
+			} else if fallbackBuffered == 0 && errors.Is(fallbackErr, transform.ErrShortSrc) {
+				// We are committed to fallback mode already & need more bytes
+				return fallbackConsumed, fallbackBuffered, true, fallbackErr
 			}
 
 			firstFallbackRune, _ := utf8.DecodeRune(fallbackBuffer[:])
-			if firstFallbackRune == unicode.ReplacementChar {
+			if buffered > 0 && (fallbackBuffered == 0 || firstFallbackRune == unicode.ReplacementChar) {
 				// Use what we got the first time
 				return consumed, buffered, false, err
+			} else if fallbackBuffered == 0 || firstFallbackRune == unicode.ReplacementChar {
+				// We are committed to fallback mode already & failed to decode
+				return fallbackConsumed, fallbackBuffered, true, fallbackErr
 			}
 
 			// Use the fallback decoding
@@ -283,7 +304,8 @@ func (c *Charset) PromoteDefaultCharset(oldCodePage string, newCodePage string) 
 	return c.defaultCharset.CompareAndSwap(defaultCharset, charset), nil
 }
 
-// SetNegotiatedCharset modifies the negotiated charset to the requested character set
+// SetNegotiatedEncodingCharset modifies the negotiated keyboard charset to the requested
+// character set
 func (c *Charset) SetNegotiatedEncodingCharset(codePage string) error {
 	charset, err := c.buildCharset(codePage)
 	if err != nil {
@@ -294,6 +316,8 @@ func (c *Charset) SetNegotiatedEncodingCharset(codePage string) error {
 	return nil
 }
 
+// SetNegotiatedDecodingCHarset modifies the negotiated printer charset to the requested character
+// set.
 func (c *Charset) SetNegotiatedDecodingCharset(codePage string) error {
 	charset, err := c.buildCharset(codePage)
 	if err != nil {

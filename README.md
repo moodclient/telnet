@@ -46,13 +46,8 @@ func encounteredError(t *telnet.Terminal, err error) {
 	fmt.Println(err)
 }
 
-func incomingText(t *telnet.Terminal, data telnet.IncomingTextData) {
-	if data.OverwritePrevious {
-		// Rewrite line
-		fmt.Print(string('\r'))
-	}
-
-	fmt.Print(data.Text)
+func printerOutput(t *telnet.Terminal, output telnet.PrinterOutput) {
+	fmt.Print(output.String())
 }
 
 ...
@@ -60,8 +55,8 @@ func incomingText(t *telnet.Terminal, data telnet.IncomingTextData) {
 		Side:               telnet.SideClient,
 		DefaultCharsetName: "US-ASCII",
 		EventHooks: telnet.EventHooks{
-			IncomingText:     []telnet.IncomingTextEvent{incomingText},
-			EncounteredError: []telnet.ErrorEvent{encounteredError},
+			PrinterOutput:    []telnet.PrinterOutputHandler{printerOutput},
+			EncounteredError: []telnet.ErrorHandler{encounteredError},
 		},
 	})
 ```
@@ -108,8 +103,6 @@ The ultimate goal of this library is for it to not just implement the basics of 
 
 A lot!  The example provided makes it clear that this library works well when communications occur in linemode, with basic ANSI colors. Character mode works... less well.  VT100 worse than that.
 
-There are also a few random bits of problems around keyboard locking: prompt hints sent from the keyboard will currently be sent before the text they're supposed to follow when outbound text is being buffered, and there's no way to buffer outbound commands entirely (which is necessary to implement the MCCP family of telopts).
-
 Additionally, this has not been used in an environment where one server is tracking several different terminals for different connected users. The library may grow difficult to work with in that situation.
 
-The next step is going to be working with [Bubbletea](https://github.com/charmbracelet/bubbletea) to understand Raw Mode better in order to improve how the library interacts with character mode and VT100, with the ultimate goal of an example BBS client to sit alongside the example MUD client.
+The next step is going to be to improve utils.KeyboardFeed to work well both in and out of character mode and to change the example mud client to handle character mode, line mode, and echo while the terminal is in Raw Mode, with the ultimate goal of an example BBS client to sit alongside the example MUD client.

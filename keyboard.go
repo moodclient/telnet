@@ -247,7 +247,11 @@ func (k *TelnetKeyboard) encounteredError(err error) {
 	k.eventPump.EncounteredError(err)
 }
 
-// WriteCommand will queue a command to be sent to the remote
+// WriteCommand will queue a command to be sent to the remote. A post-send event can be provided,
+// which is useful for cases where the provided command will signal to the remote that the
+// communication semantic is changing in some way. If the postSend method is not nil, it will
+// be executed immediately after writing the command to the output stream, and can be used
+// to change the communication semantic for future writes.
 func (k *TelnetKeyboard) WriteCommand(c Command, postSend func() error) {
 	k.input <- keyboardTransport{
 		command:  c,
@@ -292,6 +296,11 @@ func (k *TelnetKeyboard) ClearPromptCommand(flag PromptCommands) {
 // This command will send an EOR if that telopt is active.  Otherwise,
 // it will send a GA if it isn't being suppressed. If it is not valid to
 // send either prompt hint, this method will do nothing.
+//
+// If one wants to send an IAC GA or IAC EOR command, this method should be used
+// rather than WriteCommand. Commands sent via WriteCommand will not be buffered
+// when the keyboard is under a lock, so prompt hints sent via WriteCommand will arrive
+// before the prompt text when a keyboard lock is active.
 func (k *TelnetKeyboard) SendPromptHint() {
 	k.input <- keyboardTransport{
 		promptCommand: true,
