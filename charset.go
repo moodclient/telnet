@@ -167,43 +167,51 @@ func (c *Charset) attemptDecode(charset *currentCharset, buffer []byte, input []
 
 // Decode accepts a byte slice that is encoded in the printer's current encoding
 // and returns a string of UTF-8 text
-func (c *Charset) Decode(buffer []byte, incomingText []byte) (consumed int, buffered int, err error) {
+func (c *Charset) Decode(buffer []byte, incomingText []byte, fallback bool) (consumed int, buffered int, fellback bool, err error) {
 	if len(incomingText) == 0 {
-		return 0, 0, nil
+		return 0, 0, fallback, nil
 	}
 
-	charset := c.loadDecodingCharset()
+	if !fallback {
+		charset := c.loadDecodingCharset()
 
-	consumed, buffered, err = c.attemptDecode(charset, buffer, incomingText)
-	if err != nil {
-		return consumed, buffered, err
+		consumed, buffered, err = c.attemptDecode(charset, buffer, incomingText)
+		if err != nil && !errors.Is(err, transform.ErrShortSrc) {
+			return consumed, buffered, fallback, err
+		}
+
+		firstRune, _ := utf8.DecodeRune(buffer)
+		if buffered == 0 || firstRune == unicode.ReplacementChar {
+			fallback = true
+		}
 	}
 
-	firstRune, _ := utf8.DecodeRune(buffer)
-	if buffered == 0 || firstRune == unicode.ReplacementChar {
-		fallback := c.fallback.Load()
+	if fallback {
+		fallbackCharset := c.fallback.Load()
 
-		if fallback != nil {
+		if fallbackCharset != nil {
 			var fallbackBuffer [10]byte
-			fallbackConsumed, fallbackBuffered, fallbackErr := c.attemptDecode(fallback, fallbackBuffer[:], incomingText)
+			fallbackConsumed, fallbackBuffered, fallbackErr := c.attemptDecode(fallbackCharset, fallbackBuffer[:], incomingText)
 			if fallbackErr != nil || fallbackBuffered == 0 {
 				// Use what we got the first time
-				return consumed, buffered, err
+				return consumed, buffered, false, err
 			}
 
 			firstFallbackRune, _ := utf8.DecodeRune(fallbackBuffer[:])
 			if firstFallbackRune == unicode.ReplacementChar {
 				// Use what we got the first time
-				return consumed, buffered, err
+				return consumed, buffered, false, err
 			}
 
 			// Use the fallback decoding
 			copy(buffer, fallbackBuffer[:])
-			return fallbackConsumed, fallbackBuffered, nil
+			return fallbackConsumed, fallbackBuffered, fallback, nil
+		} else {
+			fallback = false
 		}
 	}
 
-	return consumed, buffered, err
+	return consumed, buffered, fallback, err
 }
 
 func (c *Charset) buildCharset(codePage string) (*currentCharset, error) {
