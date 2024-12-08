@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-// Terminal is a wrapper around a net.Conn to enable telnet communications
-// over the net.Conn.  Telnet's base protocol doesn't distinguish between
+// Terminal is a wrapper around a connection to enable telnet communications
+// over the connection.  Telnet's base protocol doesn't distinguish between
 // client and server, so there is only one terminal type for both sides of
 // the connection.  A few telopts have different behavior for the client
 // and server side though, so the terminal is aware of which side it is
@@ -24,26 +24,25 @@ import (
 // the remote peer.
 //
 // Text from the printer is sent to the consumer of the Terminal via the
-// many event hooks that can be registered for.  The IncomingText hook
-// provides individual lines of text.  Output is provided to the printer
-// directly by calling terminal.Keyboard().Send*
+// many event hooks that can be registered for.  The PrinterOutput hook
+// produces structured data that is read in from the peer, and output is
+// provided to the printer directly by calling terminal.Keyboard().Send*
 //
 // Telnet has a mechanism for sending and receiving Command objects. Most
 // of these are related to telopt negotiation, which the Terminal handles
 // on your behalf based on the telopt preferences provided at creation time.
 // In order to receive commands from the other side, it's best to register
-// for the TelOptStateChange and TelOptEvent hooks, which provide the
-// results of received commands in a more legible format.  Generally,
-// the user should not write commands unless they really, really know
-// what they're doing. If you want to signal a prompt to the remote with
-// IAC GA, use terminal.Keyboard().SendPromptHint().
+// for TelOptEvent hooks, which provide the results of received commands in
+// a more legible format.  Generally, the user should not write commands unless
+// they really, really know what they're doing. If you want to signal a prompt
+// to the remote with IAC GA, use terminal.Keyboard().SendPromptHint().
 //
 // The user should bear in mind that the terminal runs three (substantive)
 // goroutines: one for the printer, one for the keyboard, and one
-// for the terminal.  The terminal loop interacts with both of the other
-// loops directly. It also directly calls registered hooks, which means that
-// blocking calls made in hook methods will block functioning of the
-// terminal altogether. It is the responsibility of the consumer to
+// for the terminal.  The terminal loop receives data from both of the other
+// loops and forwards it to registered hooks, which means that
+// blocking calls in hook methods that last long enough will block functioning
+// of the terminal altogether. It is the responsibility of the consumer to
 // move long-running calls to their own concurrency scheme where necessary.
 type Terminal struct {
 	reader   io.Reader
@@ -64,7 +63,7 @@ type Terminal struct {
 	remoteEcho       bool
 }
 
-// NewTerminal initializes a new terminal object and begins reading from
+// NewTerminal initializes a new terminal object from a net.Conn and begins reading from
 // the printer and writing to the keyboard. Telopt negotiation begins with the remote
 // immediately when this method is called.
 //
@@ -77,6 +76,11 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 	return NewTerminalFromPipes(ctx, conn, conn, config)
 }
 
+// NewTerminalFromPipes initializes a new terminal from a Reader and Writer instead of a net.Conn.
+// This is useful for testing, or when data is arriving via more circuitous means than a simple
+// connection.  This Terminal will continue until BOTH the reader and writer are closed (or the context
+// is cancelled).  Only closing one will cause the connection to stall but the terminal will remain
+// active, so that should never be done.
 func NewTerminalFromPipes(ctx context.Context, reader io.Reader, writer io.Writer, config TerminalConfig) (*Terminal, error) {
 	charset, err := NewCharset(config.DefaultCharsetName, config.FallbackCharsetName, config.CharsetUsage)
 	if err != nil {
@@ -205,11 +209,12 @@ func (t *Terminal) sentCommand(c Command) {
 	t.outboundCommandHooks.Fire(t, c)
 }
 
-// RaiseTelOptEvent is called by telopt implementations to inject an event
+// RaiseTelOptEvent is called by telopt implementations, and the Terminal, to inject an event
 // into the terminal event stream. Telopts can use this method to fire arbitrary events
-// that can be interpreted by the consumer.  This is good for event-delivery telopts
-// such as GCMP, but it can also be used for things like NAWS to alert the consumer
-// that basic data has been collected from the remote.
+// that can be interpreted by the consumer. This terminal will use this method to inject
+// TelOptStateChangeEvent when negotiations cause a telopt to change its state.  This is good
+// for event-delivery telopts such as GCMP, but it can also be used for things like NAWS to alert
+// the consumer that basic data has been collected from the remote.
 func (t *Terminal) RaiseTelOptEvent(event TelOptEvent) {
 	switch typed := event.(type) {
 	case TelOptStateChangeEvent:
@@ -287,8 +292,7 @@ func (t *Terminal) CommandString(c Command) string {
 }
 
 // WaitForExit will block until the terminal has ceased operation, either due to
-// the context passed to NewTerminal being cancelled, or due to the underlying network
-// connection closing.
+// the context passed to NewTerminal being cancelled, or due to the underlying data streams closing.
 func (t *Terminal) WaitForExit() error {
 	t.keyboard.waitForExit()
 
@@ -331,19 +335,3 @@ func (t *Terminal) RegisterEncounteredErrorHook(encounteredError ErrorHandler) {
 func (t *Terminal) RegisterTelOptEventHook(telOptEvent TelOptEventHandler) {
 	t.telOptEventHooks.Register(EventHook[TelOptEvent](telOptEvent))
 }
-
-// // RegisterTelOptStateChangeEventHook will register an event to be called when a telopt's
-// // state changes. The possible states are located in TelOptState. All TelOpts registered
-// // in NewTerminal begin in the TelOptInactive state. If a telopt has been registered to
-// // request functioning, there will be an event call changing the state to TelOptRequested.
-// // This event will only be called when the state actually changes- an external request
-// // to move the telopt to a state it's already in will not trigger this event.
-// //
-// // Bear in mind that telopts have two states: the local state, indicating whether the telopt
-// // is active on our side of the connection, and the remote state, indicating whether
-// // the telopt is active on the peer's side of the connection.  Telopts can be active
-// // on only one side of the connection, both, or neither.  Different telopts have different
-// // expected behaviors.
-// func (t *Terminal) RegisterTelOptStateChangeEventHook(telOptStateChange TelOptStateChangeEvent) {
-// 	t.telOptStateChangeHooks.Register(EventHook[TelOptStateChangeData](telOptStateChange))
-// }

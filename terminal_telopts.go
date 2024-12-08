@@ -130,6 +130,12 @@ func (t *Terminal) processTelOptCommand(c Command) error {
 
 		if oldState == TelOptActive {
 			t.keyboard.WriteCommand(c.agree(), postSend)
+		} else if oldState == TelOptRequested && postSend != nil {
+			// There's no command to write but the postSend event still needs to be run
+			err = postSend()
+			if err != nil {
+				t.encounteredError(err)
+			}
 		}
 
 		t.RaiseTelOptEvent(TelOptStateChangeEvent{
@@ -163,6 +169,12 @@ func (t *Terminal) processTelOptCommand(c Command) error {
 	if oldState == TelOptInactive {
 		// Need to send an accept command
 		t.keyboard.WriteCommand(c.agree(), postSend)
+	} else if oldState == TelOptRequested && postSend != nil {
+		// There's no command to write but the postSend event still needs to be run
+		err = postSend()
+		if err != nil {
+			t.encounteredError(err)
+		}
 	}
 
 	t.RaiseTelOptEvent(TelOptStateChangeEvent{
