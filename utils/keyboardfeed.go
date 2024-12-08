@@ -42,18 +42,20 @@ func (f *KeyboardFeed) appendInput(input string) {
 	f.inputLock.Lock()
 	defer f.inputLock.Unlock()
 
-	// \r needs to become \r\n in all cases
+	// \r needs to become \r\n in line mode
 	if strings.HasSuffix(input, "\r") {
 		f.justAppendedCR = true
-		input = "\r\n"
+		if !f.terminal.IsCharacterMode() {
+			input = "\r\n"
+		}
 	} else if input == "\n" && f.justAppendedCR {
 		// The input sent us \r\n but we already sent the \r off with a \n so just eat this
 		f.justAppendedCR = false
 		return
+	} else {
+		// We have some text other than \n so clear the carriage return flag
+		f.justAppendedCR = false
 	}
-
-	// We have some text other than \n so clear the carriage return flag
-	f.justAppendedCR = false
 
 	// Replace \n by itself with \r\n
 	if strings.HasSuffix(input, "\n") && !strings.HasSuffix(input, "\r\n") {

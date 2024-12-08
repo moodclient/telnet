@@ -152,17 +152,17 @@ func (c *Charset) Encode(utf8Text string) ([]byte, error) {
 
 func (c *Charset) attemptDecode(charset *currentCharset, buffer []byte, input []byte) (consumed int, buffered int, err error) {
 	for i := 0; i < len(input); i++ {
-		dstBytes, srcBytes, err := charset.decoder.Transform(buffer, input[:i+1], false)
+		buffered, consumed, err = charset.decoder.Transform(buffer, input[:i+1], false)
 		if err != nil && !errors.Is(err, transform.ErrShortSrc) {
-			return srcBytes, dstBytes, err
+			return consumed, buffered, err
 		}
 
-		if dstBytes > 0 {
-			return srcBytes, dstBytes, nil
+		if buffered > 0 {
+			return consumed, buffered, err
 		}
 	}
 
-	return 0, 0, nil
+	return consumed, buffered, err
 }
 
 // Decode accepts a byte slice that is encoded in the printer's current encoding
