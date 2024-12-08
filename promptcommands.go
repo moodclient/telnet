@@ -10,7 +10,16 @@ import "sync/atomic"
 type PromptCommands uint32
 
 const (
+	// PromptCommandGA refers to the IAC GA command. This command was initially used as part
+	// of telnet's scheme for supporting half-duplex terminals.  However, half-duplex terminals
+	// were rapidly phased out after the telnet protocol was introduced and eventually came to be
+	// used for a variety of hacky boutique purposes.  For MUDs and BBSs it is often deactivated
+	// via the SUPPRESS-GO-AHEAD telopt in order to activate character mode. It is sometimes used
+	// as a prompt indicator on MUDs
 	PromptCommandGA PromptCommands = 1 << iota
+	// PromptCommandEOR refers to the IAC EOR command. This was introduced as part of the EOR telopt
+	// and can be used for any purpose an application would like to use it for.  It is mainly only
+	// used as a prompt indicator on MUDs.
 	PromptCommandEOR
 )
 

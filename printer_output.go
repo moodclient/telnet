@@ -7,20 +7,26 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+type TelOptLibrary interface {
+	CommandString(c Command) string
+}
+
 type PrinterOutput interface {
 	String() string
-	EscapedString(terminal *Terminal) string
+	EscapedString(terminal TelOptLibrary) string
 }
 
 type TextOutput struct {
 	Text string
 }
 
+var _ PrinterOutput = TextOutput{}
+
 func (o TextOutput) String() string {
 	return o.Text
 }
 
-func (o TextOutput) EscapedString(terminal *Terminal) string {
+func (o TextOutput) EscapedString(terminal TelOptLibrary) string {
 	return o.Text
 }
 
@@ -28,8 +34,10 @@ type CommandOutput struct {
 	Command Command
 }
 
+var _ PrinterOutput = CommandOutput{}
+
 func (o CommandOutput) String() string { return "" }
-func (o CommandOutput) EscapedString(terminal *Terminal) string {
+func (o CommandOutput) EscapedString(terminal TelOptLibrary) string {
 	return terminal.CommandString(o.Command)
 }
 
@@ -37,11 +45,13 @@ type PromptOutput struct {
 	Type PromptCommands
 }
 
+var _ PrinterOutput = PromptOutput{}
+
 func (o PromptOutput) String() string {
 	return ""
 }
 
-func (o PromptOutput) EscapedString(terminal *Terminal) string {
+func (o PromptOutput) EscapedString(terminal TelOptLibrary) string {
 	switch o.Type {
 	case PromptCommandGA:
 		return "IAC GA"
@@ -55,6 +65,8 @@ func (o PromptOutput) EscapedString(terminal *Terminal) string {
 type SequenceOutput struct {
 	Sequence ansi.Sequence
 }
+
+var _ PrinterOutput = SequenceOutput{}
 
 func (o SequenceOutput) String() string {
 	switch s := o.Sequence.(type) {
@@ -212,7 +224,7 @@ func controlCodeText(code ansi.ControlCode) string {
 	return "<???>"
 }
 
-func (o SequenceOutput) EscapedString(terminal *Terminal) string {
+func (o SequenceOutput) EscapedString(terminal TelOptLibrary) string {
 	switch s := o.Sequence.(type) {
 	case ansi.ControlCode:
 		return controlCodeText(s)

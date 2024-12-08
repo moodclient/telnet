@@ -66,11 +66,23 @@ type TelnetOption interface {
 	// locally.  This is not called when the option is initialized to Inactive at the start of a new
 	// terminal, and it will not be called if the terminal tries to repeatedly transition this option
 	// to the same state.
+	//
+	// This method returns a simple callback method.  If that callback is not nil, then it will
+	// be executed as soon as the command associated with this state change is written to the
+	// keyboard stream (or immediately if no command is necessary).  This is vital for cases when
+	// a telopt changes the semantics of outbound communications, since that semantic change needs
+	// to take place immediately after we send the command indicating that we will be changing things.
 	TransitionLocalState(newState TelOptState) (func() error, error)
 	// TransitionRemoteState is calledw hen the terminal attempts to change this option to a new state
 	// for the remote.  This is not called when the option is initialized to Inactive at the start of
 	// a new terminal, and it will nto be called if the terminal tries to repeatedly transition this
 	// option to the same state
+	//
+	// This method returns a simple callback method.  If that callback is not nil, then it will
+	// be executed as soon as the command associated with this state change is written to the
+	// keyboard stream (or immediately if no command is necessary).  This is vital for cases when
+	// a telopt changes the semantics of outbound communications, since that semantic change needs
+	// to take place immediately after we send the command indicating that we will be changing things.
 	TransitionRemoteState(newState TelOptState) (func() error, error)
 
 	// Subnegotiate is called when a subnegotiation request arrives from the remote party. This will only
@@ -109,11 +121,17 @@ func (s TelOptState) String() string {
 	}
 }
 
+// TelOptEvent is an interface used for all TelOptEvents issued by anyone, both TelOptStateChangeEvent,
+// which is issued by this terminal, and other events issued by telopts themselves
 type TelOptEvent interface {
+	// String produces human-readable text describing the event that occurred
 	String() string
+	// Option is the specific telopt that experienced an event
 	Option() TelnetOption
 }
 
+// TelOptStateChangeEvent is a TelOptEvent that indicates that a single telopt has changed state
+// on one side of the connection
 type TelOptStateChangeEvent struct {
 	TelnetOption TelnetOption
 	Side         TelOptSide

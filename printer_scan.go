@@ -13,6 +13,28 @@ import (
 	"golang.org/x/text/transform"
 )
 
+// TelnetScanner is used internally by TelnetPrinter to read sequences from a Reader and output
+// units of received output.  It is exported due to the object being potentially useful outside
+// the context of this library's Terminal object. If you intend to use Terminal, there is no
+// need to use or think about this type.
+//
+// TelnetScanner's Scan method works like an io.Scanner, except that it accepts a context.Context.
+// If the ctx is cancelled or timed out, Scan will return false with with the appropriate error.
+// Otherwise, it will return true until it reaches the input stream's EOF. Like io.Scanner, Scan
+// is a blocking call.
+//
+// After Scan returns, even if it returns false, Err and Output may have useful return values.
+// Output returns a PrinterOutput object, or nil. PrinterOutput may be one of the PrinterOutput
+// implementations defined in this package (TextOutput, PromptOutput, SequenceOutput, etc.).
+//
+// PrinterOutput's String method will always return the correct text to print to a VT100 compatible
+// terminal, and EscapedString will always return the correct text to print to a default log in which
+// you'd like to see escape sequences, commands, and control characters.
+//
+// Otherwise, you can inspect the PrinterOutput objects by using a type switch.
+//
+// As with Scanner, one should deal with the Output() return value, if any, before dealing with
+// the Err() return value.
 type TelnetScanner struct {
 	scanner           *bufio.Scanner
 	currentlyScanning bool
@@ -29,6 +51,8 @@ type TelnetScanner struct {
 	outSequence ansi.Sequence
 }
 
+// NewTelnetScanner creates a new TelnetScanner from a Charset (used to decode bytes from
+// the stream) and an input stream
 func NewTelnetScanner(charset *Charset, inputStream io.Reader) *TelnetScanner {
 	scan := bufio.NewScanner(inputStream)
 
@@ -44,10 +68,12 @@ func NewTelnetScanner(charset *Charset, inputStream io.Reader) *TelnetScanner {
 	return scanner
 }
 
+// Err returns the error, if any, raised by the most recent call to Scan
 func (s *TelnetScanner) Err() error {
 	return s.err
 }
 
+// Output returns the PrinterOutput, if any, assembled by the most recent call to Scan
 func (s *TelnetScanner) Output() PrinterOutput {
 	return s.nextOutput
 }
@@ -125,6 +151,12 @@ func (s *TelnetScanner) processDanglingBytes() {
 	}
 }
 
+// Scan will block until either the provided context is done, or a complete block of data is
+// received from the input stream. "Complete" is subjective, but the TelnetScanner will not output
+// partial ANSI sequences or partial glyphs of text.
+//
+// Scan returns true if the caller should continue to call Scan to receive additional data. After
+// calling Scan, Err and Output should be called to check for useful data.
 func (s *TelnetScanner) Scan(ctx context.Context) bool {
 	s.err = nil
 	s.nextOutput = nil
