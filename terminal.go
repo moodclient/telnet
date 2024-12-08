@@ -3,6 +3,7 @@ package telnet
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -45,7 +46,8 @@ import (
 // terminal altogether. It is the responsibility of the consumer to
 // move long-running calls to their own concurrency scheme where necessary.
 type Terminal struct {
-	conn     net.Conn
+	reader   io.Reader
+	writer   io.Writer
 	side     TerminalSide
 	charset  *Charset
 	keyboard *TelnetKeyboard
@@ -72,6 +74,10 @@ type Terminal struct {
 // All functioning of this terminal is determined by the properties passed in the TerminalConfig
 // object.  See that type for more information.
 func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Terminal, error) {
+	return NewTerminalFromPipes(ctx, conn, conn, config)
+}
+
+func NewTerminalFromPipes(ctx context.Context, reader io.Reader, writer io.Writer, config TerminalConfig) (*Terminal, error) {
 	charset, err := NewCharset(config.DefaultCharsetName, config.FallbackCharsetName, config.CharsetUsage)
 	if err != nil {
 		return nil, err
@@ -79,14 +85,15 @@ func NewTerminal(ctx context.Context, conn net.Conn, config TerminalConfig) (*Te
 
 	pump := newEventPump()
 
-	keyboard, err := newTelnetKeyboard(charset, conn, pump)
+	keyboard, err := newTelnetKeyboard(charset, writer, pump)
 	if err != nil {
 		return nil, err
 	}
 
-	printer := newTelnetPrinter(charset, conn, pump)
+	printer := newTelnetPrinter(charset, reader, pump)
 	terminal := &Terminal{
-		conn:     conn,
+		reader:   reader,
+		writer:   writer,
 		side:     config.Side,
 		charset:  charset,
 		keyboard: keyboard,
