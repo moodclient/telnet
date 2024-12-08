@@ -7,15 +7,22 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// TelOptLibrary is an interface used to abstract Terminal from PrinterOutput
+// for the benefit of anyone who may be using TelnetScanner without Terminal.
+//
+// Any method that accepts this type will likely want to use *Terminal
 type TelOptLibrary interface {
 	CommandString(c Command) string
 }
 
+// PrinterOutput is an interface output by Terminal and TelnetScanner to represent
+// a single unit of output from telnet
 type PrinterOutput interface {
 	String() string
 	EscapedString(terminal TelOptLibrary) string
 }
 
+// TextOutput is a type representing printable text that has been received from telnet
 type TextOutput struct {
 	Text string
 }
@@ -30,6 +37,7 @@ func (o TextOutput) EscapedString(terminal TelOptLibrary) string {
 	return o.Text
 }
 
+// CommandOutput is a type representing a single IAC command received from telnet
 type CommandOutput struct {
 	Command Command
 }
@@ -41,6 +49,8 @@ func (o CommandOutput) EscapedString(terminal TelOptLibrary) string {
 	return terminal.CommandString(o.Command)
 }
 
+// PromptOutput is a type representing a hint received from telnet about where the user
+// prompt should be placed in the output stream.
 type PromptOutput struct {
 	Type PromptCommands
 }
@@ -62,6 +72,8 @@ func (o PromptOutput) EscapedString(terminal TelOptLibrary) string {
 	}
 }
 
+// SequenceOutput is a type representing a single escape sequence or control code received
+// from telnet.
 type SequenceOutput struct {
 	Sequence ansi.Sequence
 }
