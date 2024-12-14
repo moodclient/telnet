@@ -86,18 +86,18 @@ func (s *TelnetScanner) pushError(err error) {
 
 func (s *TelnetScanner) flushText(text string) {
 	if text != "" {
-		s.nextOutput = TextOutput{Text: text}
+		s.nextOutput = TextData{Text: text}
 		return
 	} else if s.outSequence != nil {
-		s.nextOutput = SequenceOutput{Sequence: s.outSequence}
+		s.nextOutput = SequenceData{Sequence: s.outSequence}
 		s.outSequence = nil
 		return
 	} else if s.outCommand.OpCode == GA {
-		s.nextOutput = PromptOutput{Type: PromptCommandGA}
+		s.nextOutput = PromptData{Type: PromptCommandGA}
 	} else if s.outCommand.OpCode == EOR {
-		s.nextOutput = PromptOutput{Type: PromptCommandEOR}
+		s.nextOutput = PromptData{Type: PromptCommandEOR}
 	} else if s.outCommand.OpCode != 0 {
-		s.nextOutput = CommandOutput{Command: s.outCommand}
+		s.nextOutput = CommandData{Command: s.outCommand}
 	}
 	s.outCommand = Command{}
 }

@@ -41,7 +41,7 @@ func (l *DebugLog) logError(terminal *telnet.Terminal, err error) {
 
 func (l *DebugLog) logPrinterOutput(terminal *telnet.Terminal, output telnet.TerminalData) {
 	switch o := output.(type) {
-	case telnet.CommandOutput:
+	case telnet.CommandData:
 		l.logger.LogAttrs(context.Background(), l.config.IncomingCommandLevel, "Received command", slog.String("command", o.EscapedString(terminal)))
 	default:
 		l.logger.LogAttrs(context.Background(), l.config.IncomingTextLevel, output.EscapedString(terminal))
@@ -50,7 +50,7 @@ func (l *DebugLog) logPrinterOutput(terminal *telnet.Terminal, output telnet.Ter
 
 func (l *DebugLog) logOutboundData(terminal *telnet.Terminal, data telnet.TerminalData) {
 	switch d := data.(type) {
-	case telnet.CommandOutput:
+	case telnet.CommandData:
 		l.logger.LogAttrs(context.Background(), l.config.OutboundCommandLevel, "Sent command", slog.String("command", d.EscapedString(terminal)))
 	default:
 		l.logger.LogAttrs(context.Background(), l.config.OutboundTextLevel, "Sent text", slog.String("contents", d.EscapedString(terminal)))

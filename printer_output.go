@@ -22,46 +22,46 @@ type TerminalData interface {
 	EscapedString(terminal TelOptLibrary) string
 }
 
-// TextOutput is a type representing printable text that has been received from telnet
-type TextOutput struct {
+// TextData is a type representing printable text that has been received from telnet
+type TextData struct {
 	Text string
 }
 
-var _ TerminalData = TextOutput{}
+var _ TerminalData = TextData{}
 
-func (o TextOutput) String() string {
+func (o TextData) String() string {
 	return o.Text
 }
 
-func (o TextOutput) EscapedString(terminal TelOptLibrary) string {
+func (o TextData) EscapedString(terminal TelOptLibrary) string {
 	return o.Text
 }
 
-// CommandOutput is a type representing a single IAC command received from telnet
-type CommandOutput struct {
+// CommandData is a type representing a single IAC command received from telnet
+type CommandData struct {
 	Command Command
 }
 
-var _ TerminalData = CommandOutput{}
+var _ TerminalData = CommandData{}
 
-func (o CommandOutput) String() string { return "" }
-func (o CommandOutput) EscapedString(terminal TelOptLibrary) string {
+func (o CommandData) String() string { return "" }
+func (o CommandData) EscapedString(terminal TelOptLibrary) string {
 	return terminal.CommandString(o.Command)
 }
 
-// PromptOutput is a type representing a hint received from telnet about where the user
+// PromptData is a type representing a hint received from telnet about where the user
 // prompt should be placed in the output stream.
-type PromptOutput struct {
+type PromptData struct {
 	Type PromptCommands
 }
 
-var _ TerminalData = PromptOutput{}
+var _ TerminalData = PromptData{}
 
-func (o PromptOutput) String() string {
+func (o PromptData) String() string {
 	return ""
 }
 
-func (o PromptOutput) EscapedString(terminal TelOptLibrary) string {
+func (o PromptData) EscapedString(terminal TelOptLibrary) string {
 	switch o.Type {
 	case PromptCommandGA:
 		return "IAC GA"
@@ -72,15 +72,15 @@ func (o PromptOutput) EscapedString(terminal TelOptLibrary) string {
 	}
 }
 
-// SequenceOutput is a type representing a single escape sequence or control code received
+// SequenceData is a type representing a single escape sequence or control code received
 // from telnet.
-type SequenceOutput struct {
+type SequenceData struct {
 	Sequence ansi.Sequence
 }
 
-var _ TerminalData = SequenceOutput{}
+var _ TerminalData = SequenceData{}
 
-func (o SequenceOutput) String() string {
+func (o SequenceData) String() string {
 	stringer, isString := o.Sequence.(fmt.Stringer)
 	if isString {
 		return stringer.String()
@@ -224,7 +224,7 @@ func controlCodeText(code ansi.ControlCode) string {
 	return "<???>"
 }
 
-func (o SequenceOutput) EscapedString(terminal TelOptLibrary) string {
+func (o SequenceData) EscapedString(terminal TelOptLibrary) string {
 	switch s := o.Sequence.(type) {
 	case ansi.ControlCode:
 		return controlCodeText(s)

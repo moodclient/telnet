@@ -207,7 +207,7 @@ func (t *Terminal) encounteredPrinterOutput(output TerminalData) {
 func (t *Terminal) flushPrintedOutboundData() {
 	text := t.outboundDataText.String()
 	if text != "" {
-		t.outboundDataHooks.Fire(t, TextOutput{
+		t.outboundDataHooks.Fire(t, TextData{
 			Text: text,
 		})
 	}
@@ -222,7 +222,7 @@ func (t *Terminal) dispatchOutboundData(seq ansi.Sequence) {
 		t.outboundDataText.WriteString(data.Cluster)
 	default:
 		t.flushPrintedOutboundData()
-		t.outboundDataHooks.Fire(t, SequenceOutput{Sequence: data})
+		t.outboundDataHooks.Fire(t, SequenceData{Sequence: data})
 	}
 }
 
@@ -236,15 +236,15 @@ func (t *Terminal) sentText(text string) {
 func (t *Terminal) sentCommand(c Command) {
 	switch c.OpCode {
 	case GA:
-		t.outboundDataHooks.Fire(t, PromptOutput{
+		t.outboundDataHooks.Fire(t, PromptData{
 			PromptCommandGA,
 		})
 	case EOR:
-		t.outboundDataHooks.Fire(t, PromptOutput{
+		t.outboundDataHooks.Fire(t, PromptData{
 			PromptCommandEOR,
 		})
 	default:
-		t.outboundDataHooks.Fire(t, CommandOutput{
+		t.outboundDataHooks.Fire(t, CommandData{
 			Command: c,
 		})
 	}
