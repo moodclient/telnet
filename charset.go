@@ -189,14 +189,31 @@ func (c *Charset) Decode(buffer []byte, incomingText []byte, fallback bool) (con
 
 		consumed, buffered, err = c.attemptDecode(charset, buffer, incomingText)
 		if err != nil && !errors.Is(err, transform.ErrShortSrc) {
+			// Actual serious error occurred
 			return consumed, buffered, fallback, err
 		} else if buffered == 0 && errors.Is(err, transform.ErrShortSrc) {
+			// We need more text to decode
 			return consumed, buffered, fallback, err
-		}
-
-		firstRune, _ := utf8.DecodeRune(buffer)
-		if buffered == 0 || firstRune == unicode.ReplacementChar {
+		} else if buffered == 0 {
+			// Didn't find any decodeable text
 			fallback = true
+		} else {
+			// We decoded unicode text- if we received a replacement character, then we should
+			// consider trying the fallback character set
+			firstRune, size := utf8.DecodeRune(buffer)
+			if firstRune == unicode.ReplacementChar && size >= len(incomingText) {
+				// If we were actually given the replacement rune as input then don't fall back
+				for i := 0; i < size; i++ {
+					if buffer[i] != incomingText[i] {
+						fallback = true
+						break
+					}
+				}
+			} else if firstRune == unicode.ReplacementChar {
+				// Incoming text is too small to contain the replacement character, so it's fine
+				// to fall back
+				fallback = true
+			}
 		}
 	}
 
