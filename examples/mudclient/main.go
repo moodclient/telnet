@@ -12,6 +12,8 @@ import (
 	"syscall"
 
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/charmbracelet/x/input"
+	"github.com/charmbracelet/x/term"
 	"github.com/moodclient/telnet"
 	"github.com/moodclient/telnet/telopts"
 	"github.com/moodclient/telnet/utils"
@@ -21,7 +23,7 @@ func encounteredError(t *telnet.Terminal, err error) {
 	fmt.Println(err)
 }
 
-func printerOutput(t *telnet.Terminal, output telnet.PrinterOutput) {
+func printerOutput(t *telnet.Terminal, output telnet.TerminalData) {
 	fmt.Print(output.String())
 }
 
@@ -43,6 +45,19 @@ func main() {
 	stdin := os.Stdin
 	lipgloss.EnableLegacyWindowsANSI(os.Stdout)
 	lipgloss.EnableLegacyWindowsANSI(stdin)
+
+	state, err := term.MakeRaw(stdin.Fd())
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer func() {
+		_ = term.Restore(stdin.Fd(), state)
+	}()
+
+	inputDriver, err := input.NewReader(stdin, os.Getenv("OS"), 0)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -71,7 +86,7 @@ func main() {
 			}),
 		},
 		EventHooks: telnet.EventHooks{
-			PrinterOutput:    []telnet.PrinterOutputHandler{printerOutput},
+			PrinterOutput:    []telnet.TerminalDataHandler{printerOutput},
 			EncounteredError: []telnet.ErrorHandler{encounteredError},
 		},
 	})
@@ -79,7 +94,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	feed, err := utils.NewKeyboardFeed(terminal, stdin, nil)
+	feed, err := utils.NewKeyboardFeed(terminal, inputDriver, nil)
 	if err != nil {
 		log.Fatalln(err)
 	}

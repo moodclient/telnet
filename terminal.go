@@ -7,6 +7,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Terminal is a wrapper around a connection to enable telnet communications
@@ -45,17 +47,18 @@ import (
 // of the terminal altogether. It is the responsibility of the consumer to
 // move long-running calls to their own concurrency scheme where necessary.
 type Terminal struct {
-	reader   io.Reader
-	writer   io.Writer
-	side     TerminalSide
-	charset  *Charset
-	keyboard *TelnetKeyboard
-	printer  *TelnetPrinter
-	options  map[TelOptCode]TelnetOption
+	reader             io.Reader
+	writer             io.Writer
+	side               TerminalSide
+	charset            *Charset
+	keyboard           *TelnetKeyboard
+	printer            *TelnetPrinter
+	options            map[TelOptCode]TelnetOption
+	outboundDataText   strings.Builder
+	outboundDataParser *ansi.Parser
 
-	printerOutputHooks    *EventPublisher[PrinterOutput]
-	outboundTextHooks     *EventPublisher[string]
-	outboundCommandHooks  *EventPublisher[Command]
+	printerOutputHooks    *EventPublisher[TerminalData]
+	outboundDataHooks     *EventPublisher[TerminalData]
 	encounteredErrorHooks *EventPublisher[error]
 	telOptEventHooks      *EventPublisher[TelOptEvent]
 
@@ -105,11 +108,11 @@ func NewTerminalFromPipes(ctx context.Context, reader io.Reader, writer io.Write
 		options:  make(map[TelOptCode]TelnetOption),
 
 		printerOutputHooks:    NewPublisher(config.EventHooks.PrinterOutput),
-		outboundTextHooks:     NewPublisher(config.EventHooks.OutboundText),
-		outboundCommandHooks:  NewPublisher(config.EventHooks.OutboundCommand),
+		outboundDataHooks:     NewPublisher(config.EventHooks.OutboundData),
 		encounteredErrorHooks: NewPublisher(config.EventHooks.EncounteredError),
 		telOptEventHooks:      NewPublisher(config.EventHooks.TelOptEvent),
 	}
+	terminal.outboundDataParser = ansi.NewParser(terminal.dispatchOutboundData)
 	err = terminal.initTelopts(config.TelOpts)
 	if err != nil {
 		return nil, err
@@ -197,16 +200,54 @@ func (t *Terminal) encounteredError(err error) {
 	t.encounteredErrorHooks.Fire(t, err)
 }
 
-func (t *Terminal) encounteredPrinterOutput(output PrinterOutput) {
+func (t *Terminal) encounteredPrinterOutput(output TerminalData) {
 	t.printerOutputHooks.Fire(t, output)
 }
 
+func (t *Terminal) flushPrintedOutboundData() {
+	text := t.outboundDataText.String()
+	if text != "" {
+		t.outboundDataHooks.Fire(t, TextOutput{
+			Text: text,
+		})
+	}
+	t.outboundDataText.Reset()
+}
+
+func (t *Terminal) dispatchOutboundData(seq ansi.Sequence) {
+	switch data := seq.(type) {
+	case ansi.Rune:
+		t.outboundDataText.WriteRune(rune(data))
+	case ansi.Grapheme:
+		t.outboundDataText.WriteString(data.Cluster)
+	default:
+		t.flushPrintedOutboundData()
+		t.outboundDataHooks.Fire(t, SequenceOutput{Sequence: data})
+	}
+}
+
 func (t *Terminal) sentText(text string) {
-	t.outboundTextHooks.Fire(t, text)
+	for i := 0; i < len(text); i++ {
+		t.outboundDataParser.Advance(text[i])
+	}
+	t.flushPrintedOutboundData()
 }
 
 func (t *Terminal) sentCommand(c Command) {
-	t.outboundCommandHooks.Fire(t, c)
+	switch c.OpCode {
+	case GA:
+		t.outboundDataHooks.Fire(t, PromptOutput{
+			PromptCommandGA,
+		})
+	case EOR:
+		t.outboundDataHooks.Fire(t, PromptOutput{
+			PromptCommandEOR,
+		})
+	default:
+		t.outboundDataHooks.Fire(t, CommandOutput{
+			Command: c,
+		})
+	}
 }
 
 // RaiseTelOptEvent is called by telopt implementations, and the Terminal, to inject an event
@@ -302,20 +343,14 @@ func (t *Terminal) WaitForExit() error {
 
 // RegisterPrinterOutputHook will register an event to be called when data is received
 // from the printer.
-func (t *Terminal) RegisterPrinterOutputHook(printerOutput PrinterOutputHandler) {
-	t.printerOutputHooks.Register(EventHook[PrinterOutput](printerOutput))
+func (t *Terminal) RegisterPrinterOutputHook(printerOutput TerminalDataHandler) {
+	t.printerOutputHooks.Register(EventHook[TerminalData](printerOutput))
 }
 
-// RegisterOutboundTextHook will register an event to be called when a line of text
+// RegisterOutboundDataHook will register an event to be called when something
 // has been sent from the keyboard. This is primarily useful for debug logging.
-func (t *Terminal) RegisterOutboundTextHook(outboundText StringHandler) {
-	t.outboundTextHooks.Register(EventHook[string](outboundText))
-}
-
-// RegisterOutboundCommandHook will register an event to be called when a command
-// has been sent from the keyboard. This is primarily useful for debug logging.
-func (t *Terminal) RegisterOutboundCommandHook(outboundCommand CommandHandler) {
-	t.outboundCommandHooks.Register(EventHook[Command](outboundCommand))
+func (t *Terminal) RegisterOutboundDataHook(outboundText TerminalDataHandler) {
+	t.outboundDataHooks.Register(EventHook[TerminalData](outboundText))
 }
 
 // RegisterEncounteredErrorHook will register an event to be called when an error

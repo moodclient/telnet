@@ -1,17 +1,17 @@
 package utils
 
 import (
-	"bufio"
-	"io"
 	"strings"
 	"sync"
 
+	"github.com/charmbracelet/x/input"
 	"github.com/moodclient/telnet"
+	"github.com/moodclient/telnet/telopts"
 )
 
 type KeyboardFeed struct {
 	terminal *telnet.Terminal
-	input    io.Reader
+	driver   *input.Reader
 
 	inputLock sync.Mutex
 
@@ -23,11 +23,11 @@ type KeyboardFeed struct {
 
 type EchoEvent func(terminal *telnet.Terminal, text string)
 
-func NewKeyboardFeed(terminal *telnet.Terminal, input io.Reader, echoHandlers []EchoEvent) (*KeyboardFeed, error) {
+func NewKeyboardFeed(terminal *telnet.Terminal, inputDriver *input.Reader, echoHandlers []EchoEvent) (*KeyboardFeed, error) {
 	feed := &KeyboardFeed{
 		terminal:      terminal,
-		input:         input,
 		echoPublisher: telnet.NewPublisher(echoHandlers),
+		driver:        inputDriver,
 	}
 	terminal.RegisterTelOptEventHook(feed.telOptEvents)
 
@@ -38,32 +38,25 @@ func (f *KeyboardFeed) RegisterEchoHandler(hook EchoEvent) {
 	f.echoPublisher.Register(telnet.EventHook[string](hook))
 }
 
-func (f *KeyboardFeed) appendInput(input string) {
+func (f *KeyboardFeed) appendInput(input rune) {
 	f.inputLock.Lock()
 	defer f.inputLock.Unlock()
 
 	// \r needs to become \r\n in line mode
-	if strings.HasSuffix(input, "\r") {
+	if input == '\r' {
 		f.justAppendedCR = true
-		if !f.terminal.IsCharacterMode() {
-			input = "\r\n"
-		}
-	} else if input == "\n" && f.justAppendedCR {
+		f.bufferedInput.WriteRune(input)
+	} else if input == '\n' && f.justAppendedCR {
 		// The input sent us \r\n but we already sent the \r off with a \n so just eat this
 		f.justAppendedCR = false
 		return
+	} else if input == '\n' {
+		f.bufferedInput.WriteString("\r\n")
 	} else {
 		// We have some text other than \n so clear the carriage return flag
 		f.justAppendedCR = false
+		f.bufferedInput.WriteRune(input)
 	}
-
-	// Replace \n by itself with \r\n
-	if strings.HasSuffix(input, "\n") && !strings.HasSuffix(input, "\r\n") {
-		input = input[:len(input)-1] + "\r\n"
-	}
-
-	f.echoPublisher.Fire(f.terminal, input)
-	f.bufferedInput.WriteString(input)
 }
 
 func (f *KeyboardFeed) flushInput() string {
@@ -76,46 +69,43 @@ func (f *KeyboardFeed) flushInput() string {
 	return str
 }
 
-func (f *KeyboardFeed) handleText(text string) {
-	if len(text) == 0 {
-		return
-	}
-
+func (f *KeyboardFeed) handleText(text rune) {
 	// When we switch over to character mode, it can be in a different goroutine, so
 	// in order to prevent characters from going out of order when we flush our outstanding
 	// buffer, we'll always append and then flush
 	f.appendInput(text)
 
-	if f.terminal.IsCharacterMode() {
+	if f.terminal.IsCharacterMode() || text == '\n' || text == '\r' {
 		f.terminal.Keyboard().WriteString(f.flushInput())
 		return
-	}
-
-	// Depending on what precisely our input reader is, we could receive different line
-	// indicators.  Raw mode terminals give us \r, cooked mode terminals give us \r\n or
-	// \n.  A process manually piping stuff in will probably give us \n.
-	//
-	// What we'll do is just always flush if the token is a linebreak symbol- appendinput
-	// will do the thinking and add \n to \r itself and then eat any \n that might come after.
-	// It will also replace \n with \r\n
-	if text == "\n" || text == "\r" {
-		f.terminal.Keyboard().WriteString(f.flushInput())
 	}
 }
 
 func (f *KeyboardFeed) FeedLoop() error {
-	scanner := bufio.NewScanner(f.input)
-	scanner.Split(bufio.ScanRunes)
 
-	for scanner.Scan() {
-		f.handleText(scanner.Text())
+	for {
+		events, err := f.driver.ReadEvents()
+		if err != nil {
+			return err
+		}
 
-		if scanner.Err() != nil {
-			return scanner.Err()
+		for _, event := range events {
+			switch e := event.(type) {
+			case input.WindowSizeEvent:
+				naws, err := telnet.GetTelOpt[telopts.NAWS](f.terminal)
+				if err != nil {
+					// Ignore problems with naws
+					continue
+				}
+
+				naws.SetLocalSize(e.Width, e.Height)
+			case input.KeyPressEvent:
+				if e.Code != 0 {
+					f.handleText(e.Code)
+				}
+			}
 		}
 	}
-
-	return scanner.Err()
 }
 
 func (f *KeyboardFeed) telOptEvents(terminal *telnet.Terminal, event telnet.TelOptEvent) {

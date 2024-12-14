@@ -29,8 +29,7 @@ func NewDebugLog(terminal *telnet.Terminal, logger *slog.Logger, config DebugLog
 
 	terminal.RegisterEncounteredErrorHook(log.logError)
 	terminal.RegisterPrinterOutputHook(log.logPrinterOutput)
-	terminal.RegisterOutboundCommandHook(log.logOutboundCommand)
-	terminal.RegisterOutboundTextHook(log.logOutboundText)
+	terminal.RegisterOutboundDataHook(log.logOutboundData)
 	terminal.RegisterTelOptEventHook(log.logTelOptEvent)
 
 	return log
@@ -40,7 +39,7 @@ func (l *DebugLog) logError(terminal *telnet.Terminal, err error) {
 	l.logger.LogAttrs(context.Background(), l.config.EncounteredErrorLevel, "Encountered error", slog.Any("error", err))
 }
 
-func (l *DebugLog) logPrinterOutput(terminal *telnet.Terminal, output telnet.PrinterOutput) {
+func (l *DebugLog) logPrinterOutput(terminal *telnet.Terminal, output telnet.TerminalData) {
 	switch o := output.(type) {
 	case telnet.CommandOutput:
 		l.logger.LogAttrs(context.Background(), l.config.IncomingCommandLevel, "Received command", slog.String("command", o.EscapedString(terminal)))
@@ -49,12 +48,13 @@ func (l *DebugLog) logPrinterOutput(terminal *telnet.Terminal, output telnet.Pri
 	}
 }
 
-func (l *DebugLog) logOutboundCommand(terminal *telnet.Terminal, c telnet.Command) {
-	l.logger.LogAttrs(context.Background(), l.config.OutboundCommandLevel, "Sent command", slog.String("command", terminal.CommandString(c)))
-}
-
-func (l *DebugLog) logOutboundText(terminal *telnet.Terminal, text string) {
-	l.logger.LogAttrs(context.Background(), l.config.OutboundTextLevel, "Sent text", slog.String("contents", text))
+func (l *DebugLog) logOutboundData(terminal *telnet.Terminal, data telnet.TerminalData) {
+	switch d := data.(type) {
+	case telnet.CommandOutput:
+		l.logger.LogAttrs(context.Background(), l.config.OutboundCommandLevel, "Sent command", slog.String("command", d.EscapedString(terminal)))
+	default:
+		l.logger.LogAttrs(context.Background(), l.config.OutboundTextLevel, "Sent text", slog.String("contents", d.EscapedString(terminal)))
+	}
 }
 
 func (l *DebugLog) logTelOptEvent(terminal *telnet.Terminal, event telnet.TelOptEvent) {

@@ -46,7 +46,7 @@ type TelnetScanner struct {
 	bytesToDecode []byte
 
 	err         error
-	nextOutput  PrinterOutput
+	nextOutput  TerminalData
 	outCommand  Command
 	outSequence ansi.Sequence
 }
@@ -74,7 +74,7 @@ func (s *TelnetScanner) Err() error {
 }
 
 // Output returns the PrinterOutput, if any, assembled by the most recent call to Scan
-func (s *TelnetScanner) Output() PrinterOutput {
+func (s *TelnetScanner) Output() TerminalData {
 	return s.nextOutput
 }
 

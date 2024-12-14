@@ -49,14 +49,8 @@ func (e *EventPublisher[U]) Fire(terminal *Terminal, eventData U) {
 // ErrorHandler is an event hook type that receives errors
 type ErrorHandler func(t *Terminal, err error)
 
-// PrinterOutputHandler is an event hook type that receives text, control codes, escape sequences, and commands from the printer
-type PrinterOutputHandler func(t *Terminal, output PrinterOutput)
-
-// CommandHandler is an event hook type that receives Command objects
-type CommandHandler func(t *Terminal, c Command)
-
-// StringHandler is an event hook type that receives strings
-type StringHandler func(t *Terminal, text string)
+// TerminalDataHandler is an event hook type that receives text, control codes, escape sequences, and commands from the printer
+type TerminalDataHandler func(t *Terminal, output TerminalData)
 
 // TelOptEventHandler is an event hook type that receives arbitrary events raised by telopts
 // with Terminal.RaiseTelOptEvent
@@ -66,10 +60,8 @@ type TelOptEventHandler func(t *Terminal, event TelOptEvent)
 // when calling NewTerminal.  See TerminalConfig for more info.
 type EventHooks struct {
 	EncounteredError []ErrorHandler
-	PrinterOutput    []PrinterOutputHandler
-
-	OutboundText    []StringHandler
-	OutboundCommand []CommandHandler
+	PrinterOutput    []TerminalDataHandler
+	OutboundData     []TerminalDataHandler
 
 	TelOptEvent []TelOptEventHandler
 }

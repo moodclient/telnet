@@ -15,9 +15,9 @@ type TelOptLibrary interface {
 	CommandString(c Command) string
 }
 
-// PrinterOutput is an interface output by Terminal and TelnetScanner to represent
+// TerminalData is an interface output by Terminal and TelnetScanner to represent
 // a single unit of output from telnet
-type PrinterOutput interface {
+type TerminalData interface {
 	String() string
 	EscapedString(terminal TelOptLibrary) string
 }
@@ -27,7 +27,7 @@ type TextOutput struct {
 	Text string
 }
 
-var _ PrinterOutput = TextOutput{}
+var _ TerminalData = TextOutput{}
 
 func (o TextOutput) String() string {
 	return o.Text
@@ -42,7 +42,7 @@ type CommandOutput struct {
 	Command Command
 }
 
-var _ PrinterOutput = CommandOutput{}
+var _ TerminalData = CommandOutput{}
 
 func (o CommandOutput) String() string { return "" }
 func (o CommandOutput) EscapedString(terminal TelOptLibrary) string {
@@ -55,7 +55,7 @@ type PromptOutput struct {
 	Type PromptCommands
 }
 
-var _ PrinterOutput = PromptOutput{}
+var _ TerminalData = PromptOutput{}
 
 func (o PromptOutput) String() string {
 	return ""
@@ -78,24 +78,12 @@ type SequenceOutput struct {
 	Sequence ansi.Sequence
 }
 
-var _ PrinterOutput = SequenceOutput{}
+var _ TerminalData = SequenceOutput{}
 
 func (o SequenceOutput) String() string {
-	switch s := o.Sequence.(type) {
-	case ansi.ControlCode:
-		switch s {
-		case ansi.HT:
-			return "\t"
-		case ansi.LF:
-			return "\n"
-		case ansi.CR:
-			return "\r"
-		}
-	default:
-		stringer, isStringer := s.(fmt.Stringer)
-		if isStringer {
-			return stringer.String()
-		}
+	stringer, isString := o.Sequence.(fmt.Stringer)
+	if isString {
+		return stringer.String()
 	}
 
 	return ""

@@ -19,7 +19,7 @@ type eventsTransport struct {
 	err       error
 	command   Command
 	text      string
-	output    PrinterOutput
+	output    TerminalData
 }
 
 type terminalEventPump struct {
@@ -75,7 +75,7 @@ func (p *terminalEventPump) EncounteredError(err error) {
 	}
 }
 
-func (p *terminalEventPump) EncounteredPrinterOutput(output PrinterOutput) {
+func (p *terminalEventPump) EncounteredPrinterOutput(output TerminalData) {
 	p.events <- eventsTransport{
 		eventType: eventPrinterOutput,
 		output:    output,
