@@ -6,10 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
-	"strings"
 
-	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/ansi/parser"
 	"golang.org/x/text/transform"
 )
 
@@ -36,19 +33,17 @@ import (
 // As with Scanner, one should deal with the Output() return value, if any, before dealing with
 // the Err() return value.
 type TelnetScanner struct {
-	scanner           *bufio.Scanner
-	currentlyScanning bool
-	scanResult        chan bool
+	scanner    *bufio.Scanner
+	scanResult chan bool
 
 	charset       *Charset
-	ansiParser    *ansi.Parser
+	parser        *TerminalDataParser
 	atEOF         bool
 	bytesToDecode []byte
 
-	err         error
-	nextOutput  TerminalData
-	outCommand  Command
-	outSequence ansi.Sequence
+	err        error
+	nextOutput TerminalData
+	outCommand Command
 }
 
 // NewTelnetScanner creates a new TelnetScanner from a Charset (used to decode bytes from
@@ -60,7 +55,7 @@ func NewTelnetScanner(charset *Charset, inputStream io.Reader) *TelnetScanner {
 		scanner:       scan,
 		scanResult:    make(chan bool, 1),
 		charset:       charset,
-		ansiParser:    ansi.NewParser(nil),
+		parser:        NewTerminalDataParser(),
 		bytesToDecode: make([]byte, 0, 100),
 	}
 
@@ -84,31 +79,29 @@ func (s *TelnetScanner) pushError(err error) {
 	}
 }
 
-func (s *TelnetScanner) flushText(text string) {
-	if text != "" {
-		s.nextOutput = TextData{Text: text}
+func (s *TelnetScanner) pushCommand() {
+	if s.nextOutput != nil {
 		return
-	} else if s.outSequence != nil {
-		s.nextOutput = SequenceData{Sequence: s.outSequence}
-		s.outSequence = nil
-		return
-	} else if s.outCommand.OpCode == GA {
+	}
+
+	if s.outCommand.OpCode == GA {
 		s.nextOutput = PromptData{Type: PromptCommandGA}
 	} else if s.outCommand.OpCode == EOR {
 		s.nextOutput = PromptData{Type: PromptCommandEOR}
 	} else if s.outCommand.OpCode != 0 {
 		s.nextOutput = CommandData{Command: s.outCommand}
 	}
+
 	s.outCommand = Command{}
 }
 
-func (s *TelnetScanner) processDanglingBytes() {
+func (s *TelnetScanner) processDanglingBytes() TerminalData {
 	var decodeBuffer [10]byte
 	tmpBytesSlice := s.bytesToDecode
 	var fallback bool
 
 	defer func() {
-		if len(s.bytesToDecode) > 0 {
+		if len(s.bytesToDecode) > 0 && len(tmpBytesSlice) < len(s.bytesToDecode) {
 			if len(tmpBytesSlice) > 0 {
 				copy(s.bytesToDecode[:len(tmpBytesSlice)], tmpBytesSlice)
 			}
@@ -117,8 +110,12 @@ func (s *TelnetScanner) processDanglingBytes() {
 		}
 	}()
 
+	output := NextOutput(s.parser, "")
+	if output != nil {
+		return output
+	}
+
 	for len(tmpBytesSlice) > 0 {
-		var bytesIndex int
 		consumed, buffered, fellback, err := s.charset.Decode(decodeBuffer[:], tmpBytesSlice, fallback)
 
 		fallback = fallback || fellback
@@ -128,13 +125,9 @@ func (s *TelnetScanner) processDanglingBytes() {
 		}
 
 		if buffered > 0 {
-			var action parser.Action
-			for bytesIndex = 0; bytesIndex < buffered; bytesIndex++ {
-				action = s.ansiParser.Advance(decodeBuffer[bytesIndex])
-			}
-
-			if action == parser.ExecuteAction || action == parser.DispatchAction {
-				return
+			output := NextOutput(s.parser, decodeBuffer[0:buffered])
+			if output != nil {
+				return output
 			}
 		}
 
@@ -143,12 +136,14 @@ func (s *TelnetScanner) processDanglingBytes() {
 				tmpBytesSlice = tmpBytesSlice[:0]
 			}
 
-			return
+			return nil
 		} else if err != nil {
 			s.err = err
-			return
+			return nil
 		}
 	}
+
+	return s.parser.Flush()
 }
 
 // Scan will block until either the provided context is done, or a complete block of data is
@@ -164,33 +159,17 @@ func (s *TelnetScanner) Scan(ctx context.Context) bool {
 	// We usually build up a text buffer and then return it when we find something other
 	// than text. As a result, when we come back, we need to return whatever we found that
 	// wasn't text, if anything
-	s.flushText("")
+	s.pushCommand()
 	if s.nextOutput != nil || s.err != nil {
 		return true
 	}
 
-	var textBuffer strings.Builder
+	s.nextOutput = s.processDanglingBytes()
+	if s.nextOutput != nil || s.err != nil {
+		return true
+	}
+
 	var err error
-
-	s.ansiParser.SetDispatcher(func(seq ansi.Sequence) {
-		switch typed := seq.(type) {
-		case ansi.Rune:
-			textBuffer.WriteRune(rune(typed))
-		case ansi.Grapheme:
-			textBuffer.WriteString(typed.Cluster)
-		default:
-			s.outSequence = seq.Clone()
-		}
-	})
-
-	s.processDanglingBytes()
-	s.flushText(textBuffer.String())
-	textBuffer.Reset()
-
-	if s.nextOutput != nil || s.err != nil {
-		return true
-	}
-
 	for ctx.Err() == nil && s.cancellableScan(ctx) {
 		s.atEOF = false
 		s.err = s.scanner.Err()
@@ -205,14 +184,12 @@ func (s *TelnetScanner) Scan(ctx context.Context) bool {
 			s.pushError(err)
 			s.bytesToDecode = s.bytesToDecode[:0]
 
-			s.flushText(textBuffer.String())
+			s.pushCommand()
 			return true
 		}
 
 		s.bytesToDecode = append(s.bytesToDecode, bytes...)
-		s.processDanglingBytes()
-		s.flushText(textBuffer.String())
-		textBuffer.Reset()
+		s.nextOutput = s.processDanglingBytes()
 
 		if s.nextOutput != nil || s.err != nil {
 			return true
@@ -231,7 +208,6 @@ func (s *TelnetScanner) cancellableScan(ctx context.Context) bool {
 
 	select {
 	case result := <-s.scanResult:
-		s.currentlyScanning = false
 		return result
 	case <-ctx.Done():
 		return false

@@ -7,8 +7,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-
-	"github.com/charmbracelet/x/ansi"
 )
 
 // Terminal is a wrapper around a connection to enable telnet communications
@@ -55,7 +53,7 @@ type Terminal struct {
 	printer            *TelnetPrinter
 	options            map[TelOptCode]TelnetOption
 	outboundDataText   strings.Builder
-	outboundDataParser *ansi.Parser
+	outboundDataParser *TerminalDataParser
 
 	printerOutputHooks    *EventPublisher[TerminalData]
 	outboundDataHooks     *EventPublisher[TerminalData]
@@ -112,7 +110,7 @@ func NewTerminalFromPipes(ctx context.Context, reader io.Reader, writer io.Write
 		encounteredErrorHooks: NewPublisher(config.EventHooks.EncounteredError),
 		telOptEventHooks:      NewPublisher(config.EventHooks.TelOptEvent),
 	}
-	terminal.outboundDataParser = ansi.NewParser(terminal.dispatchOutboundData)
+	terminal.outboundDataParser = NewTerminalDataParser()
 	err = terminal.initTelopts(config.TelOpts)
 	if err != nil {
 		return nil, err
@@ -204,33 +202,8 @@ func (t *Terminal) encounteredPrinterOutput(output TerminalData) {
 	t.printerOutputHooks.Fire(t, output)
 }
 
-func (t *Terminal) flushPrintedOutboundData() {
-	text := t.outboundDataText.String()
-	if text != "" {
-		t.outboundDataHooks.Fire(t, TextData{
-			Text: text,
-		})
-	}
-	t.outboundDataText.Reset()
-}
-
-func (t *Terminal) dispatchOutboundData(seq ansi.Sequence) {
-	switch data := seq.(type) {
-	case ansi.Rune:
-		t.outboundDataText.WriteRune(rune(data))
-	case ansi.Grapheme:
-		t.outboundDataText.WriteString(data.Cluster)
-	default:
-		t.flushPrintedOutboundData()
-		t.outboundDataHooks.Fire(t, SequenceData{Sequence: data})
-	}
-}
-
 func (t *Terminal) sentText(text string) {
-	for i := 0; i < len(text); i++ {
-		t.outboundDataParser.Advance(text[i])
-	}
-	t.flushPrintedOutboundData()
+	t.outboundDataParser.FireAll(t, text, t.outboundDataHooks)
 }
 
 func (t *Terminal) sentCommand(c Command) {

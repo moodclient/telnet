@@ -12,7 +12,6 @@ import (
 	"syscall"
 
 	"github.com/charmbracelet/lipgloss/v2"
-	"github.com/charmbracelet/x/input"
 	"github.com/charmbracelet/x/term"
 	"github.com/moodclient/telnet"
 	"github.com/moodclient/telnet/telopts"
@@ -54,11 +53,6 @@ func main() {
 		_ = term.Restore(stdin.Fd(), state)
 	}()
 
-	inputDriver, err := input.NewReader(stdin, os.Getenv("OS"), 0)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -94,7 +88,11 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	feed, err := utils.NewKeyboardFeed(terminal, inputDriver, nil)
+	lineFeed := utils.NewLineFeed(terminal, func(t *telnet.Terminal, data telnet.TerminalData) {
+		t.Keyboard().WriteString(data.String())
+	}, printerOutput, utils.LineFeedConfig{})
+
+	feed, err := utils.NewKeyboardFeed(terminal, stdin, lineFeed)
 	if err != nil {
 		log.Fatalln(err)
 	}
