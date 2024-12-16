@@ -17,6 +17,20 @@ const (
 	SE byte = 240
 	// NOP - No-Op. IAC NOP doesn't indicate anything at all, and this library ignores it.
 	NOP byte = 241
+	// DATAMARK - not in use by this library
+	DATAMARK byte = 242
+	// BRK - not in use by this library
+	BRK byte = 243
+	// IP - Not in use by this library
+	IP byte = 244
+	// AO - Not in use by this library
+	AO byte = 245
+	// AYT - If received, an IAC NOP will be sent in response
+	AYT byte = 246
+	// EC - Not in use by this library
+	EC byte = 247
+	// EL - Not in use by this library
+	EL byte = 248
 	// GA - Go Ahead. IAC GA is often used to indicate the end of a prompt line, so
 	// that clients know where to place a cursor. However, it was originally used for
 	// half-duplex terminals to indicate that the user could start typing and there is

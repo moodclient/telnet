@@ -199,6 +199,15 @@ func (t *Terminal) encounteredError(err error) {
 }
 
 func (t *Terminal) encounteredPrinterOutput(output TerminalData) {
+	switch o := output.(type) {
+	case CommandData:
+		if o.Command.OpCode == AYT {
+			// We response to AYT (are you there) with a no-op as a form of keepalive
+			t.keyboard.writeCommand(Command{
+				OpCode: NOP,
+			})
+		}
+	}
 	t.printerOutputHooks.Fire(t, output)
 }
 

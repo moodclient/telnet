@@ -237,7 +237,8 @@ func (s *TelnetScanner) scanTelnetWithoutEOF(data []byte) (advance int, err erro
 
 	// IAC GA, IAC EOR, and IAC NOP release on their own
 	// SE should never appear here but if it does we should recover by consuming the data
-	if data[1] == GA || data[1] == NOP || data[1] == SE || data[1] == EOR {
+	if data[1] == GA || data[1] == NOP || data[1] == SE || data[1] == EOR ||
+		data[1] == AYT {
 		return 2, nil
 	}
 
@@ -246,9 +247,14 @@ func (s *TelnetScanner) scanTelnetWithoutEOF(data []byte) (advance int, err erro
 		return 0, nil
 	}
 
-	if data[1] != SB {
-		// Everything else except subnegotiations comes in three code sets
+	if data[1] == WILL || data[1] == WONT || data[1] == DO || data[1] == DONT {
+		// Negotiation commands in three code sets
 		return 3, nil
+	}
+
+	if data[1] != SB {
+		// We received some kind of exotic code that we don't actually handle.
+		return 2, nil
 	}
 
 	nextIndex := 0
