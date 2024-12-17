@@ -239,6 +239,12 @@ func (l *LineFeed) flush(newline bool) {
 
 func (l *LineFeed) sequenceIn(sequence ansi.Sequence) {
 	if l.config.CharacterMode {
+		controlCode, isControlCode := sequence.(ansi.ControlCode)
+		if isControlCode && controlCode == '\r' {
+			l.insertData("\r\n", false)
+			return
+		}
+
 		stringer, isStringer := sequence.(fmt.Stringer)
 		if isStringer {
 			l.insertData(stringer.String(), false)
