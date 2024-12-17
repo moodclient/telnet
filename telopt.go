@@ -166,7 +166,7 @@ func (e TelOptStateChangeEvent) Option() TelnetOption {
 }
 
 func (e TelOptStateChangeEvent) String() string {
-	return fmt.Sprintf("%s: %s state changed from %s to %s", e.Option(), e.Side, e.OldState, e.NewState)
+	return fmt.Sprintf("%s: %s state changed from %s to %s", e.TelnetOption, e.Side, e.OldState, e.NewState)
 }
 
 // TypedTelnetOption - this is used as a bit of a hack for GetTelOpt. It allows

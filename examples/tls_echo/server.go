@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"log"
 	"net"
+	"os"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/moodclient/telnet"
@@ -24,6 +25,9 @@ func (s *session) echoOutput(t *telnet.Terminal, output telnet.TerminalData) {
 
 	switch o := output.(type) {
 	case telnet.TextData:
+		if o.Text == "quit" {
+			os.Exit(0)
+		}
 		t.Keyboard().WriteString(o.Text)
 	case telnet.SequenceData:
 		switch seq := o.Sequence.(type) {
@@ -36,7 +40,7 @@ func (s *session) echoOutput(t *telnet.Terminal, output telnet.TerminalData) {
 }
 
 func (s *session) sendPrompt(t *telnet.Terminal) {
-	t.Keyboard().WriteString("\r\n > ")
+	t.Keyboard().WriteString("\r\n\r\n > ")
 	t.Keyboard().SendPromptHint()
 	s.sentPrompt = true
 }
@@ -66,7 +70,7 @@ func singleConnection(ctx context.Context, conn net.Conn) {
 		}, utils.LineFeedConfig{MaxLength: 300})
 	terminal.RegisterPrinterOutputHook(lineFeed.LineIn)
 
-	terminal.Keyboard().WriteString("Welcome to your echo service! Type anything!\r\n")
+	terminal.Keyboard().WriteString("Welcome to your echo service! Type anything!")
 	s.sendPrompt(terminal)
 
 	err = terminal.WaitForExit()

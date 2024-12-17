@@ -242,19 +242,19 @@ func (t *Terminal) RaiseTelOptEvent(event TelOptEvent) {
 	switch typed := event.(type) {
 	case TelOptStateChangeEvent:
 		// SUPPRESS-GO-AHEAD 3
-		if typed.Side == TelOptSideRemote && typed.Option().Code() == 3 {
-			if typed.Option().RemoteState() == TelOptActive {
+		if typed.Side == TelOptSideRemote && typed.TelnetOption.Code() == 3 {
+			if typed.NewState == TelOptActive {
 				t.remoteSuppressGA = true
-			} else if typed.Option().RemoteState() == TelOptInactive {
+			} else if typed.NewState == TelOptInactive {
 				t.remoteSuppressGA = false
 			}
 		}
 
 		// ECHO 1
-		if typed.Side == TelOptSideRemote && typed.Option().Code() == 1 {
-			if typed.Option().RemoteState() == TelOptActive {
+		if typed.Side == TelOptSideRemote && typed.TelnetOption.Code() == 1 {
+			if typed.NewState == TelOptActive {
 				t.remoteEcho = true
-			} else if typed.Option().RemoteState() == TelOptInactive {
+			} else if typed.NewState == TelOptInactive {
 				t.remoteEcho = true
 			}
 		}

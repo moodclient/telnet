@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/moodclient/telnet"
+	"github.com/moodclient/telnet/telopts"
 )
 
 type KeyboardFeed struct {
@@ -50,10 +51,10 @@ func (f *KeyboardFeed) telOptEvents(terminal *telnet.Terminal, event telnet.TelO
 			return
 		}
 
-		// 1 ECHO
-		if typed.TelnetOption.Code() == 1 && typed.NewState == telnet.TelOptActive {
+		_, isEcho := typed.TelnetOption.(*telopts.ECHO)
+		if isEcho && typed.NewState == telnet.TelOptActive {
 			f.lineFeed.SetSuppressLocalEcho(true)
-		} else if typed.TelnetOption.Code() == 1 && typed.NewState == telnet.TelOptInactive {
+		} else if isEcho && typed.NewState == telnet.TelOptInactive {
 			f.lineFeed.SetSuppressLocalEcho(false)
 		}
 
