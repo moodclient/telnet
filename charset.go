@@ -157,16 +157,7 @@ func (c *Charset) Encode(utf8Text string) ([]byte, error) {
 }
 
 func (c *Charset) attemptDecode(charset *currentCharset, buffer []byte, input []byte) (consumed int, buffered int, err error) {
-	for i := 0; i < len(input); i++ {
-		buffered, consumed, err = charset.decoder.Transform(buffer, input[:i+1], false)
-		if err != nil && !errors.Is(err, transform.ErrShortSrc) {
-			return consumed, buffered, err
-		}
-
-		if buffered > 0 {
-			return consumed, buffered, err
-		}
-	}
+	buffered, consumed, err = charset.decoder.Transform(buffer, input, false)
 
 	return consumed, buffered, err
 }
@@ -188,11 +179,9 @@ func (c *Charset) Decode(buffer []byte, incomingText []byte, fallback bool) (con
 		charset := c.loadDecodingCharset()
 
 		consumed, buffered, err = c.attemptDecode(charset, buffer, incomingText)
-		if err != nil && !errors.Is(err, transform.ErrShortSrc) {
-			// Actual serious error occurred
-			return consumed, buffered, fallback, err
-		} else if buffered == 0 && errors.Is(err, transform.ErrShortSrc) {
-			// We need more text to decode
+
+		if err != nil {
+			// Actual serious error occurred or we ran out of room in one of the buffers
 			return consumed, buffered, fallback, err
 		} else if buffered == 0 {
 			// Didn't find any decodeable text
@@ -223,13 +212,16 @@ func (c *Charset) Decode(buffer []byte, incomingText []byte, fallback bool) (con
 		if fallbackCharset != nil {
 			var fallbackBuffer [10]byte
 			fallbackConsumed, fallbackBuffered, fallbackErr := c.attemptDecode(fallbackCharset, fallbackBuffer[:], incomingText)
-			if buffered > 0 && (fallbackErr != nil || fallbackBuffered == 0) {
+			isShortBuffer := errors.Is(fallbackErr, transform.ErrShortDst) || errors.Is(fallbackErr, transform.ErrShortSrc)
+			isBadError := fallbackErr != nil && !isShortBuffer
+
+			if buffered > 0 && (isBadError || fallbackBuffered == 0) {
 				// Use what we got the first time
 				return consumed, buffered, false, err
-			} else if fallbackErr != nil && !errors.Is(fallbackErr, transform.ErrShortSrc) {
+			} else if isBadError {
 				// We are committed to fallback mode already and received some sort of error
 				return fallbackConsumed, fallbackBuffered, true, fallbackErr
-			} else if fallbackBuffered == 0 && errors.Is(fallbackErr, transform.ErrShortSrc) {
+			} else if fallbackBuffered == 0 && isShortBuffer {
 				// We are committed to fallback mode already & need more bytes
 				return fallbackConsumed, fallbackBuffered, true, fallbackErr
 			}

@@ -258,9 +258,13 @@ func (l *LineFeed) sequenceIn(sequence ansi.Sequence) {
 		switch seq {
 		case '\r':
 			l.justPushedCR = true
+			l.echo(telnet.SequenceData{Sequence: ansi.ControlCode('\r')})
+			l.echo(telnet.SequenceData{Sequence: ansi.ControlCode('\n')})
 			l.flush(true)
 		case '\n':
 			if !l.justPushedCR {
+				l.echo(telnet.SequenceData{Sequence: ansi.ControlCode('\r')})
+				l.echo(telnet.SequenceData{Sequence: ansi.ControlCode('\n')})
 				l.flush(true)
 			}
 		case ansi.DEL, ansi.BS:

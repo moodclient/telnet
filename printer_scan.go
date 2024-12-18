@@ -96,9 +96,9 @@ func (s *TelnetScanner) pushCommand() {
 }
 
 func (s *TelnetScanner) processDanglingBytes() TerminalData {
-	var decodeBuffer [10]byte
 	tmpBytesSlice := s.bytesToDecode
 	var fallback bool
+	var decodedBytes [1000]byte
 
 	defer func() {
 		if len(s.bytesToDecode) > 0 && len(tmpBytesSlice) < len(s.bytesToDecode) {
@@ -116,7 +116,7 @@ func (s *TelnetScanner) processDanglingBytes() TerminalData {
 	}
 
 	for len(tmpBytesSlice) > 0 {
-		consumed, buffered, fellback, err := s.charset.Decode(decodeBuffer[:], tmpBytesSlice, fallback)
+		consumed, buffered, fellback, err := s.charset.Decode(decodedBytes[:], tmpBytesSlice, fallback)
 
 		fallback = fallback || fellback
 
@@ -125,7 +125,7 @@ func (s *TelnetScanner) processDanglingBytes() TerminalData {
 		}
 
 		if buffered > 0 {
-			output := NextOutput(s.parser, decodeBuffer[0:buffered])
+			output := NextOutput(s.parser, decodedBytes[0:buffered])
 			if output != nil {
 				return output
 			}
