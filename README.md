@@ -101,8 +101,6 @@ The ultimate goal of this library is for it to not just implement the basics of 
 
 ## What Is Missing?
 
-A lot!  The example provided makes it clear that this library works well when communications occur in linemode, with basic ANSI colors. Character mode works... less well.  VT100 worse than that.
+A lot! Right now, the goal is to make this library perform well with advanced BBS servers such as 20forbeers and retrocampus. Afterwards, some improvements will have to be made to the API to support some of the more advanced MUD telopts.
 
 Additionally, this has not been used in an environment where one server is tracking several different terminals for different connected users. The library may grow difficult to work with in that situation.
-
-The next step is going to be to improve utils.KeyboardFeed to work well both in and out of character mode and to change the example mud client to handle character mode, line mode, and echo while the terminal is in Raw Mode, with the ultimate goal of an example BBS client to sit alongside the example MUD client.
