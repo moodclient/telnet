@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strings"
 	"sync/atomic"
-	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/text/encoding"
@@ -156,11 +155,41 @@ func (c *Charset) Encode(utf8Text string) ([]byte, error) {
 	return c.loadEncodingCharset().encoder.Bytes([]byte(utf8Text))
 }
 
-func (c *Charset) attemptDecode(charset *currentCharset, buffer []byte, input []byte) (consumed int, buffered int, err error) {
-	buffered, consumed, err = charset.decoder.Transform(buffer, input, false)
+func validEncoding(charset *currentCharset, incomingText []byte) EncodingState {
+	var buffer [1000]byte
+	buffered, _, err := charset.decoder.Transform(buffer[:], incomingText, false)
 
-	return consumed, buffered, err
+	bufferEmpty := errors.Is(err, transform.ErrShortDst) || errors.Is(err, transform.ErrShortSrc)
+	if !bufferEmpty && (buffered == 0 || err != nil) {
+		return EncodingInvalid
+	}
+
+	size := 1
+	valid := false
+	for i := 0; i < buffered; i += size {
+		var decoded rune
+		decoded, size = utf8.DecodeRune(buffer[i:])
+		if decoded == utf8.RuneError {
+			return EncodingInvalid
+		} else if size > 1 {
+			valid = true
+		}
+	}
+
+	if valid {
+		return EncodingValid
+	}
+
+	return EncodingUnsure
 }
+
+type EncodingState int
+
+const (
+	EncodingUnsure EncodingState = iota
+	EncodingInvalid
+	EncodingValid
+)
 
 // Decode accepts a byte slice that is encoded in the printer's current encoding as well as a
 // destination buffer for decoded bytes.  Additionally, it accepts a bool indicating whether
@@ -170,78 +199,31 @@ func (c *Charset) attemptDecode(charset *currentCharset, buffer []byte, input []
 // The method returns how many bytes were consumed from the incoming text, how many bytes were
 // written to the buffer, whether the charset had to move to fallback mode due to decoding failure,
 // and potentially an error.
-func (c *Charset) Decode(buffer []byte, incomingText []byte, fallback bool) (consumed int, buffered int, fellback bool, err error) {
+func (c *Charset) Decode(buffer []byte, incomingText []byte, fallback EncodingState) (consumed int, buffered int, fellback EncodingState, err error) {
 	if len(incomingText) == 0 {
 		return 0, 0, fallback, nil
 	}
 
-	if !fallback {
-		charset := c.loadDecodingCharset()
+	charset := c.loadDecodingCharset()
+	fallbackCharset := c.fallback.Load()
+	charsetToUse := charset
 
-		consumed, buffered, err = c.attemptDecode(charset, buffer, incomingText)
+	if fallbackCharset != nil && fallback == EncodingUnsure {
+		fallback = validEncoding(charset, incomingText)
 
-		if err != nil {
-			// Actual serious error occurred or we ran out of room in one of the buffers
-			return consumed, buffered, fallback, err
-		} else if buffered == 0 {
-			// Didn't find any decodeable text
-			fallback = true
-		} else {
-			// We decoded unicode text- if we received a replacement character, then we should
-			// consider trying the fallback character set
-			firstRune, size := utf8.DecodeRune(buffer)
-			if firstRune == unicode.ReplacementChar && size >= len(incomingText) {
-				// If we were actually given the replacement rune as input then don't fall back
-				for i := 0; i < size; i++ {
-					if buffer[i] != incomingText[i] {
-						fallback = true
-						break
-					}
-				}
-			} else if firstRune == unicode.ReplacementChar {
-				// Incoming text is too small to contain the replacement character, so it's fine
-				// to fall back
-				fallback = true
+		if fallback == EncodingInvalid {
+			fallbackEncodingState := validEncoding(fallbackCharset, incomingText)
+			if fallbackEncodingState == EncodingInvalid {
+				fallback = EncodingValid
 			}
 		}
 	}
 
-	if fallback {
-		fallbackCharset := c.fallback.Load()
-
-		if fallbackCharset != nil {
-			var fallbackBuffer [10]byte
-			fallbackConsumed, fallbackBuffered, fallbackErr := c.attemptDecode(fallbackCharset, fallbackBuffer[:], incomingText)
-			isShortBuffer := errors.Is(fallbackErr, transform.ErrShortDst) || errors.Is(fallbackErr, transform.ErrShortSrc)
-			isBadError := fallbackErr != nil && !isShortBuffer
-
-			if buffered > 0 && (isBadError || fallbackBuffered == 0) {
-				// Use what we got the first time
-				return consumed, buffered, false, err
-			} else if isBadError {
-				// We are committed to fallback mode already and received some sort of error
-				return fallbackConsumed, fallbackBuffered, true, fallbackErr
-			} else if fallbackBuffered == 0 && isShortBuffer {
-				// We are committed to fallback mode already & need more bytes
-				return fallbackConsumed, fallbackBuffered, true, fallbackErr
-			}
-
-			firstFallbackRune, _ := utf8.DecodeRune(fallbackBuffer[:])
-			if buffered > 0 && (fallbackBuffered == 0 || firstFallbackRune == unicode.ReplacementChar) {
-				// Use what we got the first time
-				return consumed, buffered, false, err
-			} else if fallbackBuffered == 0 || firstFallbackRune == unicode.ReplacementChar {
-				// We are committed to fallback mode already & failed to decode
-				return fallbackConsumed, fallbackBuffered, true, fallbackErr
-			}
-
-			// Use the fallback decoding
-			copy(buffer, fallbackBuffer[:])
-			return fallbackConsumed, fallbackBuffered, fallback, nil
-		} else {
-			fallback = false
-		}
+	if fallbackCharset != nil && fallback == EncodingInvalid {
+		charsetToUse = fallbackCharset
 	}
+
+	buffered, consumed, err = charsetToUse.decoder.Transform(buffer, incomingText, false)
 
 	return consumed, buffered, fallback, err
 }
