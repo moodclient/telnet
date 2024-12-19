@@ -287,7 +287,7 @@ func (l *LineFeed) sequenceIn(sequence ansi.Sequence) {
 		case '~':
 			param, hasParam := seq.Param(0, -1)
 			if hasParam && param == 3 {
-				// Delete
+				// Delete ESC[3~
 				l.deleteAtCursor()
 				return
 			}
