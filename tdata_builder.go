@@ -6,57 +6,55 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-func buildDispatcher(builder *strings.Builder, data *TerminalData) ansi.ParserDispatcher {
-	return func(sequence ansi.Sequence) {
-		switch seq := sequence.(type) {
-		case ansi.Rune:
-			builder.WriteRune(rune(seq))
-		case ansi.Grapheme:
-			builder.WriteString(seq.Cluster)
-		default:
-			*data = SequenceData{Sequence: seq.Clone()}
-		}
-	}
-}
-
-func ParseTerminalData[T string | []byte](data T, output func(data TerminalData)) {
-	parser := ansi.GetParser()
-	defer ansi.PutParser(parser)
-
-	var builder strings.Builder
-	var terminalData TerminalData
-
-	parser.SetDispatcher(buildDispatcher(&builder, &terminalData))
-
-	for byteIndex := 0; byteIndex < len(data); byteIndex++ {
-		parser.Advance(data[byteIndex])
-
-		if terminalData != nil {
-			if builder.Len() > 0 {
-				output(TextData{Text: builder.String()})
-				builder.Reset()
-			}
-			output(terminalData)
-			terminalData = nil
-		}
-	}
-
-	if builder.Len() > 0 {
-		output(TextData{Text: builder.String()})
-	}
-}
-
 type TerminalDataParser struct {
 	bytes        []byte
+	parsedBytes  []byte
 	parser       *ansi.Parser
+	parserState  byte
 	builder      strings.Builder
-	terminalData TerminalData
+	terminalData []TerminalData
+	queueStart   int
+	queueEnd     int
 }
 
 func NewTerminalDataParser() *TerminalDataParser {
 	parser := &TerminalDataParser{}
-	parser.parser = ansi.NewParser(buildDispatcher(&parser.builder, &parser.terminalData))
+	parser.parser = ansi.NewParser(nil)
 	return parser
+}
+
+func (p *TerminalDataParser) queueData(data TerminalData) {
+	if p.queueEnd < len(p.terminalData) {
+		p.terminalData[p.queueEnd] = data
+		p.queueEnd++
+		return
+	}
+
+	len := p.queueLen()
+	if p.queueStart < 10 || p.queueStart < len/4 {
+		p.terminalData = append(p.terminalData, data)
+		p.queueEnd++
+		return
+	}
+
+	copy(p.terminalData[0:len], p.terminalData[p.queueStart:p.queueEnd])
+	p.queueStart = 0
+	p.queueEnd = len
+	p.queueData(data)
+}
+
+func (p *TerminalDataParser) dequeueData() TerminalData {
+	if p.queueEnd == p.queueStart {
+		return nil
+	}
+
+	out := p.terminalData[p.queueStart]
+	p.queueStart++
+	return out
+}
+
+func (p *TerminalDataParser) queueLen() int {
+	return p.queueEnd - p.queueStart
 }
 
 func NextOutput[T string | []byte](p *TerminalDataParser, data T) TerminalData {
@@ -78,38 +76,64 @@ func NextOutput[T string | []byte](p *TerminalDataParser, data T) TerminalData {
 		}
 	}()
 
-	if p.terminalData != nil {
-		out := p.terminalData
-		p.terminalData = nil
-		return out
+	if p.queueLen() > 0 {
+		return p.dequeueData()
 	}
 
-	for ; index < len(p.bytes); index++ {
-		p.parser.Advance(p.bytes[index])
+	for index < len(p.bytes) {
+		var parsed []byte
+		var width, consumed int
+		parsed, width, consumed, p.parserState = ansi.DecodeSequence(p.bytes[index:], p.parserState, p.parser)
 
-		if p.terminalData != nil {
-			index++
-
-			if p.builder.Len() > 0 {
-				out := p.builder.String()
-				p.builder.Reset()
-				return TextData{Text: out}
-			}
-
-			out := p.terminalData
-			p.terminalData = nil
-			return out
+		index += consumed
+		if width == 0 {
+			p.parsedBytes = append(p.parsedBytes, parsed...)
+		} else {
+			p.builder.Write(parsed)
+			continue
 		}
+
+		if p.parserState != ansi.NormalState {
+			return p.dequeueData()
+		}
+
+		if p.builder.Len() > 0 {
+			p.queueData(TextData(p.builder.String()))
+			p.builder.Reset()
+		}
+
+		cmd := p.parser.Cmd().Command()
+		if cmd != 0 && ansi.HasCsiPrefix(p.parsedBytes) {
+			p.queueData(CsiData{ansi.CsiSequence{Cmd: p.parser.Cmd(), Params: append([]ansi.Parameter{}, p.parser.Params()...)}})
+		} else if cmd != 0 && ansi.HasOscPrefix(p.parsedBytes) {
+			p.queueData(OscData{ansi.OscSequence{Cmd: cmd, Data: append([]byte{}, p.parser.Data()...)}})
+		} else if cmd != 0 && ansi.HasDcsPrefix(p.parsedBytes) {
+			p.queueData(DcsData{ansi.DcsSequence{Cmd: p.parser.Cmd(), Params: append([]ansi.Parameter{}, p.parser.Params()...), Data: append([]byte{}, p.parser.Data()...)}})
+		} else if cmd != 0 && ansi.HasEscPrefix(p.parsedBytes) {
+			p.queueData(EscData{ansi.EscSequence(p.parser.Cmd())})
+		} else if ansi.HasSosPrefix(p.parsedBytes) {
+			p.queueData(SosData{ansi.SosSequence{Data: append([]byte{}, p.parser.Data()...)}})
+		} else if ansi.HasPmPrefix(p.parsedBytes) {
+			p.queueData(PmData{ansi.PmSequence{Data: append([]byte{}, p.parser.Data()...)}})
+		} else if ansi.HasApcPrefix(p.parsedBytes) {
+			p.queueData(ApcData{ansi.ApcSequence{Data: append([]byte{}, p.parser.Data()...)}})
+		} else {
+			for parsedIndex := 0; parsedIndex < len(p.parsedBytes); parsedIndex++ {
+				p.queueData(ControlCodeData(p.parsedBytes[parsedIndex]))
+			}
+		}
+
+		p.parsedBytes = p.parsedBytes[:0]
 	}
 
-	return nil
+	return p.dequeueData()
 }
 
 func (p *TerminalDataParser) Flush() TerminalData {
 	if p.builder.Len() > 0 {
 		out := p.builder.String()
 		p.builder.Reset()
-		return TextData{Text: out}
+		return TextData(out)
 	}
 
 	return nil

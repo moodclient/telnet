@@ -56,7 +56,7 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context, terminal *Terminal) {
 
 		switch o := output.(type) {
 		case PromptData:
-			if p.isSuppressedPromptCommand(o.Type) {
+			if p.isSuppressedPromptCommand(PromptCommands(o)) {
 				continue
 			}
 		case CommandData:

@@ -85,9 +85,9 @@ func (s *TelnetScanner) pushCommand() {
 	}
 
 	if s.outCommand.OpCode == GA {
-		s.nextOutput = PromptData{Type: PromptCommandGA}
+		s.nextOutput = PromptData(PromptCommandGA)
 	} else if s.outCommand.OpCode == EOR {
-		s.nextOutput = PromptData{Type: PromptCommandEOR}
+		s.nextOutput = PromptData(PromptCommandEOR)
 	} else if s.outCommand.OpCode != 0 {
 		s.nextOutput = CommandData{Command: s.outCommand}
 	}

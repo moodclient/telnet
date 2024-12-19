@@ -218,13 +218,9 @@ func (t *Terminal) sentText(text string) {
 func (t *Terminal) sentCommand(c Command) {
 	switch c.OpCode {
 	case GA:
-		t.outboundDataHooks.Fire(t, PromptData{
-			PromptCommandGA,
-		})
+		t.outboundDataHooks.Fire(t, PromptData(PromptCommandGA))
 	case EOR:
-		t.outboundDataHooks.Fire(t, PromptData{
-			PromptCommandEOR,
-		})
+		t.outboundDataHooks.Fire(t, PromptData(PromptCommandEOR))
 	default:
 		t.outboundDataHooks.Fire(t, CommandData{
 			Command: c,

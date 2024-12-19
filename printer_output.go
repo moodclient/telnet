@@ -1,7 +1,6 @@
 package telnet
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -23,23 +22,21 @@ type TerminalData interface {
 }
 
 // TextData is a type representing printable text that has been received from telnet
-type TextData struct {
-	Text string
-}
+type TextData string
 
-var _ TerminalData = TextData{}
+var _ TerminalData = TextData("")
 
 func (o TextData) String() string {
-	return o.Text
+	return string(o)
 }
 
 func (o TextData) EscapedString(terminal TelOptLibrary) string {
-	return o.Text
+	return string(o)
 }
 
 // CommandData is a type representing a single IAC command received from telnet
 type CommandData struct {
-	Command Command
+	Command
 }
 
 var _ TerminalData = CommandData{}
@@ -51,18 +48,16 @@ func (o CommandData) EscapedString(terminal TelOptLibrary) string {
 
 // PromptData is a type representing a hint received from telnet about where the user
 // prompt should be placed in the output stream.
-type PromptData struct {
-	Type PromptCommands
-}
+type PromptData PromptCommands
 
-var _ TerminalData = PromptData{}
+var _ TerminalData = PromptData(PromptCommandGA)
 
 func (o PromptData) String() string {
 	return ""
 }
 
 func (o PromptData) EscapedString(terminal TelOptLibrary) string {
-	switch o.Type {
+	switch PromptCommands(o) {
 	case PromptCommandGA:
 		return "IAC GA"
 	case PromptCommandEOR:
@@ -72,25 +67,70 @@ func (o PromptData) EscapedString(terminal TelOptLibrary) string {
 	}
 }
 
-// SequenceData is a type representing a single escape sequence or control code received
-// from telnet.
-type SequenceData struct {
-	Sequence ansi.Sequence
+type CsiData struct {
+	ansi.CsiSequence
 }
 
-var _ TerminalData = SequenceData{}
-
-func (o SequenceData) String() string {
-	stringer, isString := o.Sequence.(fmt.Stringer)
-	if isString {
-		return stringer.String()
-	}
-
-	return ""
+func (o CsiData) EscapedString(terminal TelOptLibrary) string {
+	return strings.ReplaceAll(strings.ReplaceAll(o.String(), "\x1b", "\\e"), "\x9b", "<CSI>")
 }
 
-func controlCodeText(code ansi.ControlCode) string {
-	switch code {
+type OscData struct {
+	ansi.OscSequence
+}
+
+func (o OscData) EscapedString(terminal TelOptLibrary) string {
+	return strings.ReplaceAll(strings.ReplaceAll(o.String(), "\x1b", "\\e"), "\x9d", "<OSC>")
+}
+
+type EscData struct {
+	ansi.EscSequence
+}
+
+func (o EscData) EscapedString(terminal TelOptLibrary) string {
+	return strings.ReplaceAll(o.String(), "\x1b", "\\e")
+}
+
+type DcsData struct {
+	ansi.DcsSequence
+}
+
+func (o DcsData) EscapedString(terminal TelOptLibrary) string {
+	return strings.ReplaceAll(strings.ReplaceAll(o.String(), "\x1b", "\\e"), "\x90", "<DCS>")
+}
+
+type SosData struct {
+	ansi.SosSequence
+}
+
+func (o SosData) EscapedString(terminal TelOptLibrary) string {
+	return strings.ReplaceAll(strings.ReplaceAll(o.String(), "\x1b", "\\e"), "\x98", "<SOS>")
+}
+
+type PmData struct {
+	ansi.PmSequence
+}
+
+func (o PmData) EscapedString(terminal TelOptLibrary) string {
+	return strings.ReplaceAll(strings.ReplaceAll(o.String(), "\x1b", "\\e"), "\x9e", "<PM>")
+}
+
+type ApcData struct {
+	ansi.ApcSequence
+}
+
+func (o ApcData) EscapedString(terminal TelOptLibrary) string {
+	return strings.ReplaceAll(strings.ReplaceAll(o.String(), "\x1b", "\\e"), "\x9f", "<APC>")
+}
+
+type ControlCodeData ansi.ControlCode
+
+func (o ControlCodeData) String() string {
+	return ansi.ControlCode(o).String()
+}
+
+func (o ControlCodeData) EscapedString(terminal TelOptLibrary) string {
+	switch o {
 	case ansi.NUL:
 		return "\\0"
 	case ansi.SOH:
@@ -219,22 +259,6 @@ func controlCodeText(code ansi.ControlCode) string {
 		return "<PM>"
 	case ansi.APC:
 		return "<APC>"
-	}
-
-	return "<???>"
-}
-
-func (o SequenceData) EscapedString(terminal TelOptLibrary) string {
-	switch s := o.Sequence.(type) {
-	case ansi.ControlCode:
-		return controlCodeText(s)
-	case ansi.OscSequence:
-		return strings.ReplaceAll(strings.ReplaceAll(s.String(), "\x1b", "\\e"), string(rune(ansi.BEL)), "\\a")
-	default:
-		stringer, isStringer := s.(fmt.Stringer)
-		if isStringer {
-			return strings.ReplaceAll(stringer.String(), "\x1b", "\\e")
-		}
 	}
 
 	return "<???>"

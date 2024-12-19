@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/moodclient/telnet"
 	"github.com/moodclient/telnet/telopts"
 	"github.com/moodclient/telnet/utils"
@@ -25,16 +24,13 @@ func (s *session) echoOutput(t *telnet.Terminal, output telnet.TerminalData) {
 
 	switch o := output.(type) {
 	case telnet.TextData:
-		if o.Text == "quit" {
+		if o == "quit" {
 			os.Exit(0)
 		}
-		t.Keyboard().WriteString(o.Text)
-	case telnet.SequenceData:
-		switch seq := o.Sequence.(type) {
-		case ansi.ControlCode:
-			if seq == '\n' {
-				s.sendPrompt(t)
-			}
+		t.Keyboard().WriteString(string(o))
+	case telnet.ControlCodeData:
+		if o == '\n' {
+			s.sendPrompt(t)
 		}
 	}
 }

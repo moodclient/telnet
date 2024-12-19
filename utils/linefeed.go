@@ -19,6 +19,7 @@ type LineFeedConfig struct {
 
 type LineFeed struct {
 	terminal *telnet.Terminal
+	parser   *telnet.TerminalDataParser
 
 	LineOut telnet.TerminalDataHandler
 	EchoOut telnet.TerminalDataHandler
@@ -37,6 +38,7 @@ type LineFeed struct {
 func NewLineFeed(terminal *telnet.Terminal, lineOut, echoOut telnet.TerminalDataHandler, config LineFeedConfig) *LineFeed {
 	return &LineFeed{
 		terminal: terminal,
+		parser:   telnet.NewTerminalDataParser(),
 
 		LineOut: lineOut,
 		EchoOut: echoOut,
@@ -47,12 +49,12 @@ func NewLineFeed(terminal *telnet.Terminal, lineOut, echoOut telnet.TerminalData
 
 func (l *LineFeed) insertData(newRunes string, visible bool) {
 	if l.config.MaxLength > 0 && len(l.visibleIndices) >= l.config.MaxLength {
-		l.echo(telnet.TextData{Text: string(ansi.BEL)})
+		l.echo(telnet.TextData(string(ansi.BEL)))
 		return
 	} else if l.config.MaxLength > 0 && visible && len(l.visibleIndices)+len(newRunes) > l.config.MaxLength {
 		remainingLength := l.config.MaxLength - len(l.visibleIndices)
 		newRunes = newRunes[:remainingLength]
-		l.echo(telnet.TextData{Text: string(ansi.BEL)})
+		l.echo(telnet.TextData(string(ansi.BEL)))
 	}
 
 	// We build a line using 3 components:
@@ -105,7 +107,7 @@ func (l *LineFeed) insertData(newRunes string, visible bool) {
 	// Echoing new text:
 	// 1. if the cursor is at the end, just write the new text
 	if l.cursorPos >= len(l.visibleIndices) {
-		l.echo(telnet.TextData{Text: newRunes})
+		l.echo(telnet.TextData(newRunes))
 		return
 	}
 
@@ -126,7 +128,7 @@ func (l *LineFeed) insertData(newRunes string, visible bool) {
 	update.WriteString(strconv.Itoa(writtenSpaces))
 	update.WriteRune('D')
 
-	l.echo(telnet.TextData{Text: update.String()})
+	l.echo(telnet.TextData(update.String()))
 }
 
 func (l *LineFeed) moveCursor(delta int) bool {
@@ -141,9 +143,9 @@ func (l *LineFeed) moveCursor(delta int) bool {
 	realDelta := l.cursorPos - startPos
 
 	if realDelta > 0 {
-		l.echo(telnet.TextData{Text: fmt.Sprintf("\x1b[%dC", realDelta)})
+		l.echo(telnet.TextData(fmt.Sprintf("\x1b[%dC", realDelta)))
 	} else if realDelta < 0 {
-		l.echo(telnet.TextData{Text: fmt.Sprintf("\x1b[%dD", -realDelta)})
+		l.echo(telnet.TextData(fmt.Sprintf("\x1b[%dD", -realDelta)))
 	}
 
 	return realDelta != 0
@@ -198,7 +200,7 @@ func (l *LineFeed) deleteAtCursor() {
 		echo.WriteRune('D')
 	}
 
-	l.echo(telnet.TextData{Text: echo.String()})
+	l.echo(telnet.TextData(echo.String()))
 }
 
 func (l *LineFeed) Flush(newline bool) {
@@ -227,78 +229,69 @@ func (l *LineFeed) flush(newline bool) {
 		l.currentLine = append(l.currentLine, '\r', '\n')
 	}
 
-	text := string(l.currentLine)
-	telnet.ParseTerminalData(text, func(data telnet.TerminalData) {
-		l.LineOut(l.terminal, data)
-	})
+	l.parser.FireSingle(l.terminal, string(l.currentLine), l.LineOut)
 
 	l.cursorPos = 0
 	l.currentLine = l.currentLine[:0]
 	l.visibleIndices = l.visibleIndices[:0]
 }
 
-func (l *LineFeed) sequenceIn(sequence ansi.Sequence) {
+func (l *LineFeed) controlCodeIn(sequence telnet.ControlCodeData) {
 	if l.config.CharacterMode {
-		controlCode, isControlCode := sequence.(ansi.ControlCode)
-		if isControlCode && controlCode == '\r' {
+		if sequence == '\r' {
 			l.insertData("\r\n", false)
 			return
 		}
 
-		stringer, isStringer := sequence.(fmt.Stringer)
-		if isStringer {
-			l.insertData(stringer.String(), false)
-		}
-
+		l.insertData(sequence.String(), false)
 		return
 	}
 
-	switch seq := sequence.(type) {
-	case ansi.ControlCode:
-		switch seq {
-		case '\r':
-			l.justPushedCR = true
-			l.echo(telnet.SequenceData{Sequence: ansi.ControlCode('\r')})
-			l.echo(telnet.SequenceData{Sequence: ansi.ControlCode('\n')})
+	switch sequence {
+	case '\r':
+		l.justPushedCR = true
+		l.echo(telnet.ControlCodeData(ansi.ControlCode('\r')))
+		l.echo(telnet.ControlCodeData(ansi.ControlCode('\n')))
+		l.flush(true)
+	case '\n':
+		if !l.justPushedCR {
+			l.echo(telnet.ControlCodeData(ansi.ControlCode('\r')))
+			l.echo(telnet.ControlCodeData(ansi.ControlCode('\n')))
 			l.flush(true)
-		case '\n':
-			if !l.justPushedCR {
-				l.echo(telnet.SequenceData{Sequence: ansi.ControlCode('\r')})
-				l.echo(telnet.SequenceData{Sequence: ansi.ControlCode('\n')})
-				l.flush(true)
-			}
-		case ansi.DEL, ansi.BS:
-			if l.moveCursor(-1) {
-				l.deleteAtCursor()
-			}
 		}
-	case ansi.CsiSequence:
-		switch seq.Cmd.Command() {
-		case 'C':
-			// Cursor forward
-			delta, _ := seq.Param(0, 1)
-			l.moveCursor(delta)
-			return
-		case 'D':
-			// Cusror backward
-			delta, _ := seq.Param(0, 1)
-			l.moveCursor(-delta)
-			return
-		case '~':
-			param, hasParam := seq.Param(0, -1)
-			if hasParam && param == 3 {
-				// Delete ESC[3~
-				l.deleteAtCursor()
-				return
-			}
-		}
-		l.insertData(seq.String(), false)
-	default:
-		stringer, isStringer := seq.(fmt.Stringer)
-		if isStringer {
-			l.insertData(stringer.String(), false)
+	case ansi.DEL, ansi.BS:
+		if l.moveCursor(-1) {
+			l.deleteAtCursor()
 		}
 	}
+}
+
+func (l *LineFeed) csiSequenceIn(sequence telnet.CsiData) {
+	if l.config.CharacterMode {
+		l.insertData(sequence.String(), false)
+		return
+	}
+
+	switch sequence.Cmd.Command() {
+	case 'C':
+		// Cursor forward
+		delta, _ := sequence.Param(0, 1)
+		l.moveCursor(delta)
+		return
+	case 'D':
+		// Cusror backward
+		delta, _ := sequence.Param(0, 1)
+		l.moveCursor(-delta)
+		return
+	case '~':
+		param, hasParam := sequence.Param(0, -1)
+		if hasParam && param == 3 {
+			// Delete ESC[3~
+			l.deleteAtCursor()
+			return
+		}
+	}
+	l.insertData(sequence.String(), false)
 }
 
 func (l *LineFeed) LineInSelf(data telnet.TerminalData) {
@@ -313,9 +306,13 @@ func (l *LineFeed) LineIn(t *telnet.Terminal, data telnet.TerminalData) {
 
 	switch d := data.(type) {
 	case telnet.TextData:
-		l.insertData(d.Text, true)
-	case telnet.SequenceData:
-		l.sequenceIn(d.Sequence)
+		l.insertData(d.String(), true)
+	case telnet.ControlCodeData:
+		l.controlCodeIn(d)
+	case telnet.CsiData:
+		l.csiSequenceIn(d)
+	default:
+		l.insertData(d.String(), false)
 	}
 
 	if hadPushedCR {
@@ -324,20 +321,6 @@ func (l *LineFeed) LineIn(t *telnet.Terminal, data telnet.TerminalData) {
 
 	if l.config.CharacterMode {
 		l.flush(false)
-	}
-}
-
-func (l *LineFeed) DispatchIn(sequence ansi.Sequence) {
-	l.lineLock.Lock()
-	defer l.lineLock.Unlock()
-
-	switch seq := sequence.(type) {
-	case ansi.Rune:
-		l.insertData(string([]rune{rune(seq)}), true)
-	case ansi.Grapheme:
-		l.insertData(seq.Cluster, true)
-	default:
-		l.sequenceIn(sequence)
 	}
 }
 
