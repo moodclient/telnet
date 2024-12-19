@@ -34,7 +34,13 @@ func (f *KeyboardFeed) FeedLoop() error {
 	scanner.Split(bufio.ScanRunes)
 
 	for scanner.Scan() {
-		f.parser.FireSingle(f.terminal, scanner.Text(), f.lineFeed.LineIn)
+		text := scanner.Text()
+
+		if text == "\x7f" {
+			text = "\x08"
+		}
+
+		f.parser.FireSingle(f.terminal, text, f.lineFeed.LineIn)
 
 		if scanner.Err() != nil {
 			return scanner.Err()
