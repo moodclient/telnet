@@ -284,6 +284,13 @@ func (l *LineFeed) sequenceIn(sequence ansi.Sequence) {
 			delta, _ := seq.Param(0, 1)
 			l.moveCursor(-delta)
 			return
+		case '~':
+			param, hasParam := seq.Param(0, -1)
+			if hasParam && param == 3 {
+				// Delete
+				l.deleteAtCursor()
+				return
+			}
 		}
 		l.insertData(seq.String(), false)
 	default:
