@@ -183,11 +183,14 @@ func (s *TelnetScanner) Scan(ctx context.Context) bool {
 
 		if len(bytes) > 1 && bytes[0] == IAC {
 			s.outCommand, err = parseCommand(bytes)
-			s.pushError(err)
-			s.bytesToDecode = s.bytesToDecode[:0]
 
-			s.pushCommand()
-			return true
+			if err == nil {
+				s.bytesToDecode = s.bytesToDecode[:0]
+				s.pushCommand()
+				return true
+			}
+
+			s.pushError(err)
 		}
 
 		s.bytesToDecode = append(s.bytesToDecode, bytes...)
