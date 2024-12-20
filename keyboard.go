@@ -134,13 +134,19 @@ func (k *TelnetKeyboard) write(transport keyboardTransport) bool {
 			prompts := k.promptCommands.Get()
 
 			if prompts&PromptCommandEOR != 0 {
+				transport.data = PromptData(PromptCommandEOR)
 				err = k.writeCommand(Command{
 					OpCode: EOR,
 				})
 			} else if prompts&PromptCommandGA != 0 {
+				transport.data = PromptData(PromptCommandGA)
 				err = k.writeCommand(Command{
 					OpCode: GA,
 				})
+			} else {
+				// We tried to send a prompt hint, but all prompt commands
+				// were suppressed
+				return true
 			}
 		default:
 			err = k.writeText(d)
