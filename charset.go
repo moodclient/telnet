@@ -9,6 +9,8 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/ianaindex"
 	"golang.org/x/text/transform"
+
+	"github.com/moodclient/telnet/charset"
 )
 
 type currentCharset struct {
@@ -238,6 +240,15 @@ func (c *Charset) buildCharset(codePage string) (*currentCharset, error) {
 			// see the difference between the decoder & encoder behaviors
 			decoder: encoding.Replacement.NewEncoder(),
 			name:    "UTF-8",
+		}, nil
+	}
+
+	if strings.ToLower(codePage) == "cp437-full" {
+		encoding := charset.CP437Full{}
+		return &currentCharset{
+			encoder: encoding.NewEncoder(),
+			decoder: encoding.NewDecoder(),
+			name:    "CP437-FULL",
 		}, nil
 	}
 
