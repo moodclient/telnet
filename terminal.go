@@ -51,6 +51,7 @@ type Terminal struct {
 	charset            *Charset
 	keyboard           *TelnetKeyboard
 	printer            *TelnetPrinter
+	eventPump          *terminalEventPump
 	options            map[TelOptCode]TelnetOption
 	outboundDataText   strings.Builder
 	outboundDataParser *TerminalDataParser
@@ -97,13 +98,14 @@ func NewTerminalFromPipes(ctx context.Context, reader io.Reader, writer io.Write
 
 	printer := newTelnetPrinter(charset, reader, pump)
 	terminal := &Terminal{
-		reader:   reader,
-		writer:   writer,
-		side:     config.Side,
-		charset:  charset,
-		keyboard: keyboard,
-		printer:  printer,
-		options:  make(map[TelOptCode]TelnetOption),
+		reader:    reader,
+		writer:    writer,
+		side:      config.Side,
+		charset:   charset,
+		keyboard:  keyboard,
+		printer:   printer,
+		eventPump: pump,
+		options:   make(map[TelOptCode]TelnetOption),
 
 		printerOutputHooks:    NewPublisher(config.EventHooks.PrinterOutput),
 		outboundDataHooks:     NewPublisher(config.EventHooks.OutboundData),
@@ -294,6 +296,9 @@ func (t *Terminal) WaitForExit() error {
 	t.keyboard.waitForExit()
 
 	err := t.printer.waitForExit()
+
+	t.eventPump.WaitForExit()
+
 	return err
 }
 

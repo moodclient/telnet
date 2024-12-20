@@ -20,12 +20,14 @@ type eventsTransport struct {
 }
 
 type terminalEventPump struct {
-	events chan eventsTransport
+	events   chan eventsTransport
+	complete chan bool
 }
 
 func newEventPump() *terminalEventPump {
 	return &terminalEventPump{
-		events: make(chan eventsTransport, 100),
+		events:   make(chan eventsTransport, 100),
+		complete: make(chan bool, 1),
 	}
 }
 
@@ -48,6 +50,8 @@ func (p *terminalEventPump) loopCleanup(terminal *Terminal) {
 	for ev := range p.events {
 		p.processEvent(terminal, ev)
 	}
+
+	p.complete <- true
 }
 
 func (p *terminalEventPump) TerminalLoop(ctx context.Context, terminal *Terminal) {
@@ -61,6 +65,11 @@ func (p *terminalEventPump) TerminalLoop(ctx context.Context, terminal *Terminal
 			return
 		}
 	}
+}
+
+func (p *terminalEventPump) WaitForExit() {
+	<-p.complete
+	p.complete <- true
 }
 
 func (p *terminalEventPump) EncounteredError(err error) {
