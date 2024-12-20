@@ -28,7 +28,7 @@ func printerOutput(t *telnet.Terminal, output telnet.TerminalData) {
 
 func main() {
 	if len(os.Args) != 2 {
-		log.Fatalln("syntax: mudclient <host>:<port>")
+		log.Fatalln("syntax: bbsclient <host>:<port>")
 	}
 
 	addr, err := net.ResolveTCPAddr("tcp", os.Args[1])
@@ -57,27 +57,13 @@ func main() {
 	defer cancel()
 
 	terminal, err := telnet.NewTerminal(ctx, conn, telnet.TerminalConfig{
-		Side:                telnet.SideClient,
-		DefaultCharsetName:  "US-ASCII",
-		FallbackCharsetName: "CP437-FULL",
+		Side:               telnet.SideClient,
+		DefaultCharsetName: "CP437-FULL",
 		TelOpts: []telnet.TelnetOption{
-			telopts.RegisterCHARSET(telnet.TelOptAllowLocal|telnet.TelOptAllowRemote, telopts.CHARSETConfig{
-				AllowAnyCharset:   true,
-				PreferredCharsets: []string{"UTF-8", "US-ASCII"},
-			}),
 			telopts.RegisterTRANSMITBINARY(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
-			telopts.RegisterEOR(telnet.TelOptAllowRemote | telnet.TelOptAllowLocal),
 			telopts.RegisterECHO(telnet.TelOptAllowRemote),
-			telopts.RegisterTTYPE(telnet.TelOptAllowLocal, []string{
-				"MOODCLIENT",
-				"XTERM-256COLOR",
-				"MTTS 299",
-			}),
+			telopts.RegisterTTYPE(telnet.TelOptAllowLocal, []string{"MOODCLIENT"}),
 			telopts.RegisterSUPPRESSGOAHEAD(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
-			telopts.RegisterNAWS(telnet.TelOptAllowLocal),
-			telopts.RegisterNEWENVIRON(telnet.TelOptAllowLocal, telopts.NEWENVIRONConfig{
-				WellKnownVarKeys: telopts.NEWENVIRONWellKnownVars,
-			}),
 		},
 		EventHooks: telnet.EventHooks{
 			PrinterOutput:    []telnet.TerminalDataHandler{printerOutput},
