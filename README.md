@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/gomods/athens.svg)](https://github.com/moodclient/telnet) [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/github.com/moodclient/telnet) [![GoReportCard](https://goreportcard.com/badge/github.com/nanomsg/mangos)](https://goreportcard.com/report/github.com/moodclient/telnet)
 
-This library provides a wrapper that can fit around any net.Conn in order to provide Telnet services for any arbitrary connection.  In addition to basic line-level read and write that is compatible with RFC854/RFC5198, this library also provides an extensible base for Telnet Options (telopts), handles telopt negotiation and subnegotiation routing, and provides implementations for 9 heavily-used telopts:
+This library provides a wrapper that can fit around any net.Conn in order to provide Telnet services for any arbitrary connection.  In addition to basic line-level read and write that is compatible with RFC854/RFC5198, this library also provides an extensible base for Telnet Options (telopts), handles telopt negotiation and subnegotiation routing, and provides implementations for 10 heavily-used telopts:
 
 * CHARSET
 * ECHO
@@ -13,6 +13,7 @@ This library provides a wrapper that can fit around any net.Conn in order to pro
 * SUPPRESS-GO-AHEAD
 * TRANSMIT-BINARY
 * TTYPE
+* LINEMODE
 
 In the examples folder, an example for a dead-simple terminal-based MUD client can be found.
 
@@ -46,7 +47,7 @@ func encounteredError(t *telnet.Terminal, err error) {
 	fmt.Println(err)
 }
 
-func printerOutput(t *telnet.Terminal, output telnet.PrinterOutput) {
+func printerOutput(t *telnet.Terminal, output telnet.TerminalData) {
 	fmt.Print(output.String())
 }
 
@@ -55,7 +56,7 @@ func printerOutput(t *telnet.Terminal, output telnet.PrinterOutput) {
 		Side:               telnet.SideClient,
 		DefaultCharsetName: "US-ASCII",
 		EventHooks: telnet.EventHooks{
-			PrinterOutput:    []telnet.PrinterOutputHandler{printerOutput},
+			PrinterOutput:    []telnet.TerminalDataHandler{printerOutput},
 			EncounteredError: []telnet.ErrorHandler{encounteredError},
 		},
 	})
@@ -86,7 +87,7 @@ By default, the terminal will reject all attempts at telopt negotiation by the r
 			telopts.RegisterNAWS(telnet.TelOptAllowLocal),
 		},
 		EventHooks: telnet.EventHooks{
-			IncomingText:     []telnet.IncomingTextEvent{incomingText},
+			PrinterOutput:    []telnet.TerminalDataHandler{printerOutput},
 			EncounteredError: []telnet.ErrorEvent{encounteredError},
 		},
 	})
@@ -101,6 +102,8 @@ The ultimate goal of this library is for it to not just implement the basics of 
 
 ## What Is Missing?
 
-A lot! Right now, the goal is to make this library perform well with advanced BBS servers such as 20forbeers and retrocampus. Afterwards, some improvements will have to be made to the API to support some of the more advanced MUD telopts.
+We're getting there! Currently, this library is working well with advanced MUDs as well as 
+ advanced BBS's such as retrocampus and 20forbeers.  The remaining focus will be adding 
+ support for MUD-focused telopts, such as MCCP and GMCP.
 
 Additionally, this has not been used in an environment where one server is tracking several different terminals for different connected users. The library may grow difficult to work with in that situation.
