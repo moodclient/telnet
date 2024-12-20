@@ -49,12 +49,12 @@ func NewLineFeed(terminal *telnet.Terminal, lineOut, echoOut telnet.TerminalData
 
 func (l *LineFeed) insertData(newRunes string, visible bool) {
 	if l.config.MaxLength > 0 && len(l.visibleIndices) >= l.config.MaxLength {
-		l.echo(telnet.TextData(string(ansi.BEL)))
+		l.echo(telnet.TextData(string(rune(ansi.BEL))))
 		return
 	} else if l.config.MaxLength > 0 && visible && len(l.visibleIndices)+len(newRunes) > l.config.MaxLength {
 		remainingLength := l.config.MaxLength - len(l.visibleIndices)
 		newRunes = newRunes[:remainingLength]
-		l.echo(telnet.TextData(string(ansi.BEL)))
+		l.echo(telnet.TextData(string(rune(ansi.BEL))))
 	}
 
 	// We build a line using 3 components:
