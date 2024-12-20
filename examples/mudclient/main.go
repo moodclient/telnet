@@ -88,9 +88,10 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	charMode := utils.NewCharacterModeTracker(terminal)
 	lineFeed := utils.NewLineFeed(terminal, terminal.Keyboard().LineOut, printerOutput, utils.LineFeedConfig{})
 
-	feed, err := utils.NewKeyboardFeed(terminal, stdin, lineFeed)
+	feed, err := utils.NewKeyboardFeed(terminal, stdin, lineFeed, charMode)
 	if err != nil {
 		log.Fatalln(err)
 	}

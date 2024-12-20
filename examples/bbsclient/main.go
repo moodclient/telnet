@@ -64,6 +64,7 @@ func main() {
 			telopts.RegisterECHO(telnet.TelOptAllowRemote),
 			telopts.RegisterTTYPE(telnet.TelOptAllowLocal, []string{"MOODCLIENT"}),
 			telopts.RegisterSUPPRESSGOAHEAD(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
+			telopts.RegisterLINEMODE(telnet.TelOptAllowLocal, 0),
 		},
 		EventHooks: telnet.EventHooks{
 			PrinterOutput:    []telnet.TerminalDataHandler{printerOutput},
@@ -74,9 +75,10 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	charMode := utils.NewCharacterModeTracker(terminal)
 	lineFeed := utils.NewLineFeed(terminal, terminal.Keyboard().LineOut, printerOutput, utils.LineFeedConfig{})
 
-	feed, err := utils.NewKeyboardFeed(terminal, stdin, lineFeed)
+	feed, err := utils.NewKeyboardFeed(terminal, stdin, lineFeed, charMode)
 	if err != nil {
 		log.Fatalln(err)
 	}

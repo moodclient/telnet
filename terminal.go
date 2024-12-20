@@ -53,16 +53,12 @@ type Terminal struct {
 	printer            *TelnetPrinter
 	eventPump          *terminalEventPump
 	options            map[TelOptCode]TelnetOption
-	outboundDataText   strings.Builder
 	outboundDataParser *TerminalDataParser
 
 	printerOutputHooks    *EventPublisher[TerminalData]
 	outboundDataHooks     *EventPublisher[TerminalData]
 	encounteredErrorHooks *EventPublisher[error]
 	telOptEventHooks      *EventPublisher[TelOptEvent]
-
-	remoteSuppressGA bool
-	remoteEcho       bool
 }
 
 // NewTerminal initializes a new terminal object from a net.Conn and begins reading from
@@ -177,25 +173,6 @@ func (t *Terminal) Printer() *TelnetPrinter {
 	return t.printer
 }
 
-// IsCharacterMode will return true if both the ECHO and SUPPRESS-GO-AHEAD options are
-// enabled.  Technically this is supposed to be the case when NEITHER or BOTH are enabled,
-// as traditionally, "kludge line mode", the line-at-a-time operation you might be familiar
-// with, is supposed to occur when either ECHO or SUPPRESS-GO-AHEAD, but not both, are
-// enabled.  However, MUDs traditionally operate in a line-at-a-time manner and do not
-// usually request SUPPRESS-GO-AHEAD (instead using IAC GA to indicate the location of
-// a prompt to clients), resulting in a relatively common expectation that
-// kludge line mode is active when neither telopt is active.
-//
-// As a result, in order to allow the broadest support for the most clients possible,
-// it's recommended that you activate both SUPPRESS-GO-AHEAD and EOR when you want to
-// support line-at-a-time mode and activate both SUPPRESS-GO-AHEAD and ECHO when
-// when you want to support character mode. If line-at-a-time is desired and EOR
-// is not available, then leaving SUPPRESS-GO-AHEAD and ECHO both inactive and proceeding
-// with line-at-a-time will generally work.
-func (t *Terminal) IsCharacterMode() bool {
-	return t.remoteEcho && t.remoteSuppressGA
-}
-
 func (t *Terminal) encounteredError(err error) {
 	t.encounteredErrorHooks.Fire(t, err)
 }
@@ -215,27 +192,6 @@ func (t *Terminal) encounteredOutboundData(output TerminalData) {
 // for event-delivery telopts such as GCMP, but it can also be used for things like NAWS to alert
 // the consumer that basic data has been collected from the remote.
 func (t *Terminal) RaiseTelOptEvent(event TelOptEvent) {
-	switch typed := event.(type) {
-	case TelOptStateChangeEvent:
-		// SUPPRESS-GO-AHEAD 3
-		if typed.Side == TelOptSideRemote && typed.TelnetOption.Code() == 3 {
-			if typed.NewState == TelOptActive {
-				t.remoteSuppressGA = true
-			} else if typed.NewState == TelOptInactive {
-				t.remoteSuppressGA = false
-			}
-		}
-
-		// ECHO 1
-		if typed.Side == TelOptSideRemote && typed.TelnetOption.Code() == 1 {
-			if typed.NewState == TelOptActive {
-				t.remoteEcho = true
-			} else if typed.NewState == TelOptInactive {
-				t.remoteEcho = true
-			}
-		}
-	}
-
 	t.telOptEventHooks.Fire(t, event)
 }
 

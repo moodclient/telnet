@@ -15,15 +15,17 @@ type KeyboardFeed struct {
 	input    io.Reader
 	parser   *telnet.TerminalDataParser
 
-	lineFeed *LineFeed
+	characterMode *CharacterModeTracker
+	lineFeed      *LineFeed
 }
 
-func NewKeyboardFeed(terminal *telnet.Terminal, input io.Reader, lineFeed *LineFeed) (*KeyboardFeed, error) {
+func NewKeyboardFeed(terminal *telnet.Terminal, input io.Reader, lineFeed *LineFeed, characterMode *CharacterModeTracker) (*KeyboardFeed, error) {
 	feed := &KeyboardFeed{
-		terminal: terminal,
-		input:    input,
-		lineFeed: lineFeed,
-		parser:   telnet.NewTerminalDataParser(),
+		terminal:      terminal,
+		input:         input,
+		lineFeed:      lineFeed,
+		characterMode: characterMode,
+		parser:        telnet.NewTerminalDataParser(),
 	}
 
 	terminal.RegisterTelOptEventHook(feed.telOptEvents)
@@ -97,7 +99,7 @@ func (f *KeyboardFeed) telOptEvents(terminal *telnet.Terminal, event telnet.TelO
 		} else if isEcho && typed.NewState == telnet.TelOptInactive {
 			f.lineFeed.SetSuppressLocalEcho(false)
 		}
-
-		f.lineFeed.SetCharacterMode(terminal.IsCharacterMode())
 	}
+
+	f.lineFeed.SetCharacterMode(f.characterMode.IsCharacterMode())
 }
