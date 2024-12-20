@@ -3,6 +3,7 @@ package utils
 import (
 	"bufio"
 	"io"
+	"os"
 
 	"github.com/moodclient/telnet"
 	"github.com/moodclient/telnet/telopts"
@@ -38,6 +39,10 @@ func (f *KeyboardFeed) FeedLoop() error {
 
 		if text == "\x7f" {
 			text = "\x08"
+		}
+
+		if text == "\x03" {
+			os.Exit(0)
 		}
 
 		f.parser.FireSingle(f.terminal, text, f.lineFeed.LineIn)
