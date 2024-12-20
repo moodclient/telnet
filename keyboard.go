@@ -9,10 +9,9 @@ import (
 )
 
 type keyboardTransport struct {
-	text          string
-	command       Command
-	promptCommand bool
-	postSend      func() error
+	unparsedString string
+	data           TerminalData
+	postSend       func() error
 }
 
 // TelnetKeyboard is a Terminal subsidiary that is in charge of sending outbound data
@@ -25,6 +24,7 @@ type TelnetKeyboard struct {
 	eventPump      *terminalEventPump
 	lock           *keyboardLock
 	promptCommands atomicPromptCommands
+	parser         *TerminalDataParser
 }
 
 func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEventPump) (*TelnetKeyboard, error) {
@@ -35,6 +35,7 @@ func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEv
 		complete:     make(chan bool, 1),
 		eventPump:    eventPump,
 		lock:         newKeyboardLock(),
+		parser:       NewTerminalDataParser(),
 	}
 	keyboard.promptCommands.Init()
 
@@ -88,8 +89,6 @@ func (k *TelnetKeyboard) writeCommand(c Command) error {
 		return nil
 	}
 
-	k.eventPump.SentCommand(c)
-
 	size := 2
 	if c.OpCode != GA && c.OpCode != NOP && c.OpCode != EOR {
 		size++
@@ -115,10 +114,8 @@ func (k *TelnetKeyboard) writeCommand(c Command) error {
 	return k.writeOutput(b)
 }
 
-func (k *TelnetKeyboard) writeText(text string) error {
-	k.eventPump.SentText(text)
-
-	b, err := k.charset.Encode(text)
+func (k *TelnetKeyboard) writeText(data TerminalData) error {
+	b, err := k.charset.Encode(data.String())
 	if err != nil {
 		return err
 	}
@@ -128,22 +125,59 @@ func (k *TelnetKeyboard) writeText(text string) error {
 
 func (k *TelnetKeyboard) write(transport keyboardTransport) bool {
 	var err error
-	if transport.command.OpCode != 0 {
-		err = k.writeCommand(transport.command)
-	} else if transport.promptCommand {
-		prompts := k.promptCommands.Get()
 
-		if prompts&PromptCommandEOR != 0 {
-			err = k.writeCommand(Command{
-				OpCode: EOR,
-			})
-		} else if prompts&PromptCommandGA != 0 {
-			err = k.writeCommand(Command{
-				OpCode: GA,
-			})
+	if transport.data != nil {
+		switch d := transport.data.(type) {
+		case CommandData:
+			err = k.writeCommand(d.Command)
+		case PromptData:
+			prompts := k.promptCommands.Get()
+
+			if prompts&PromptCommandEOR != 0 {
+				err = k.writeCommand(Command{
+					OpCode: EOR,
+				})
+			} else if prompts&PromptCommandGA != 0 {
+				err = k.writeCommand(Command{
+					OpCode: GA,
+				})
+			}
+		default:
+			err = k.writeText(d)
 		}
-	} else {
-		err = k.writeText(transport.text)
+
+		k.eventPump.EncounteredOutboundData(transport.data)
+	} else if transport.unparsedString != "" {
+		data := NextOutput(k.parser, transport.unparsedString)
+		for data != nil {
+			err = k.writeText(data)
+			if !k.handleError(err) {
+				break
+			}
+
+			k.eventPump.EncounteredOutboundData(data)
+			data = NextOutput(k.parser, "")
+		}
+
+		finalText := k.parser.Flush()
+		if finalText != nil {
+			err = k.writeText(finalText)
+			if k.handleError(err) {
+				k.eventPump.EncounteredOutboundData(finalText)
+			}
+		}
+
+		// Force any remaining bytes out since this was a self-contained line of text
+		data = NextOutput(k.parser, []byte{0})
+		for data != nil {
+			err = k.writeText(data)
+			if !k.handleError(err) {
+				break
+			}
+
+			k.eventPump.EncounteredOutboundData(data)
+			data = NextOutput(k.parser, "")
+		}
 	}
 
 	if err == nil && transport.postSend != nil {
@@ -175,7 +209,8 @@ keyboardLoop:
 		case <-ctx.Done():
 			break keyboardLoop
 		case input := <-k.input:
-			if input.command.OpCode != 0 {
+			_, isCommand := input.data.(CommandData)
+			if isCommand {
 				if !k.write(input) {
 					break keyboardLoop
 				}
@@ -224,7 +259,9 @@ keyboardLoop:
 	for !anyWriteFailed {
 		select {
 		case input := <-k.input:
-			if !k.lock.IsLocked() || input.command.OpCode != 0 {
+			_, isCommand := input.data.(CommandData)
+
+			if !k.lock.IsLocked() || isCommand {
 				if !k.write(input) {
 					anyWriteFailed = true
 					continue
@@ -254,9 +291,13 @@ func (k *TelnetKeyboard) encounteredError(err error) {
 // to change the communication semantic for future writes.
 func (k *TelnetKeyboard) WriteCommand(c Command, postSend func() error) {
 	k.input <- keyboardTransport{
-		command:  c,
+		data:     CommandData{c},
 		postSend: postSend,
 	}
+}
+
+func (k *TelnetKeyboard) LineOut(t *Terminal, data TerminalData) {
+	k.input <- keyboardTransport{data: data}
 }
 
 // WriteString will queue some text to be sent to the remote
@@ -266,7 +307,7 @@ func (k *TelnetKeyboard) WriteString(str string) {
 	}
 
 	k.input <- keyboardTransport{
-		text: str,
+		unparsedString: str,
 	}
 }
 
@@ -303,6 +344,6 @@ func (k *TelnetKeyboard) ClearPromptCommand(flag PromptCommands) {
 // before the prompt text when a keyboard lock is active.
 func (k *TelnetKeyboard) SendPromptHint() {
 	k.input <- keyboardTransport{
-		promptCommand: true,
+		data: PromptData(0),
 	}
 }

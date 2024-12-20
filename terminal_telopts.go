@@ -92,6 +92,12 @@ func (t *Terminal) processTelOptCommand(c Command) error {
 		return t.processSubnegotiation(c)
 	}
 
+	if c.OpCode == AYT {
+		return t.keyboard.writeCommand(Command{
+			OpCode: NOP,
+		})
+	}
+
 	// It's not a negotiation command
 	if c.OpCode != DO && c.OpCode != DONT && c.OpCode != WILL && c.OpCode != WONT {
 		return nil

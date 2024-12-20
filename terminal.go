@@ -199,33 +199,11 @@ func (t *Terminal) encounteredError(err error) {
 }
 
 func (t *Terminal) encounteredPrinterOutput(output TerminalData) {
-	switch o := output.(type) {
-	case CommandData:
-		if o.Command.OpCode == AYT {
-			// We response to AYT (are you there) with a no-op as a form of keepalive
-			t.keyboard.writeCommand(Command{
-				OpCode: NOP,
-			})
-		}
-	}
 	t.printerOutputHooks.Fire(t, output)
 }
 
-func (t *Terminal) sentText(text string) {
-	t.outboundDataParser.FireAll(t, text, t.outboundDataHooks)
-}
-
-func (t *Terminal) sentCommand(c Command) {
-	switch c.OpCode {
-	case GA:
-		t.outboundDataHooks.Fire(t, PromptData(PromptCommandGA))
-	case EOR:
-		t.outboundDataHooks.Fire(t, PromptData(PromptCommandEOR))
-	default:
-		t.outboundDataHooks.Fire(t, CommandData{
-			Command: c,
-		})
-	}
+func (t *Terminal) encounteredOutboundData(output TerminalData) {
+	t.outboundDataHooks.Fire(t, output)
 }
 
 // RaiseTelOptEvent is called by telopt implementations, and the Terminal, to inject an event

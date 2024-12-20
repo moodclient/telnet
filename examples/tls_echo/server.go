@@ -18,7 +18,8 @@ type session struct {
 
 func (s *session) echoOutput(t *telnet.Terminal, output telnet.TerminalData) {
 	if s.sentPrompt {
-		t.Keyboard().WriteString("\r\n")
+		t.Keyboard().LineOut(t, telnet.ControlCodeData('\r'))
+		t.Keyboard().LineOut(t, telnet.ControlCodeData('\n'))
 		s.sentPrompt = false
 	}
 
@@ -62,7 +63,7 @@ func singleConnection(ctx context.Context, conn net.Conn) {
 
 	lineFeed := utils.NewLineFeed(terminal, s.echoOutput,
 		func(t *telnet.Terminal, data telnet.TerminalData) {
-			t.Keyboard().WriteString(data.String())
+			t.Keyboard().LineOut(t, data)
 		}, utils.LineFeedConfig{MaxLength: 300})
 	terminal.RegisterPrinterOutputHook(lineFeed.LineIn)
 

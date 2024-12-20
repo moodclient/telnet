@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"time"
 
 	"github.com/moodclient/telnet"
 	"github.com/moodclient/telnet/telopts"
@@ -34,21 +35,49 @@ func (f *KeyboardFeed) FeedLoop() error {
 	scanner := bufio.NewScanner(f.input)
 	scanner.Split(bufio.ScanRunes)
 
-	for scanner.Scan() {
-		text := scanner.Text()
+	nulTimeout := time.NewTimer(100 * time.Millisecond)
+	nulTimeout.Stop()
 
-		if text == "\x7f" {
-			text = "\x08"
+	scannerSet := make(chan bool)
+	scannerReset := make(chan bool)
+	go func() {
+		for scanner.Scan() {
+			scannerSet <- true
+			<-scannerReset
 		}
 
-		if text == "\x03" {
-			os.Exit(0)
-		}
+		scannerSet <- false
+	}()
 
-		f.parser.FireSingle(f.terminal, text, f.lineFeed.LineIn)
+loop:
+	for {
+		select {
+		case c := <-scannerSet:
+			if !c {
+				break loop
+			}
 
-		if scanner.Err() != nil {
-			return scanner.Err()
+			text := scanner.Text()
+
+			if text == "\x7f" {
+				text = "\x08"
+			}
+
+			if text == "\x03" {
+				os.Exit(0)
+			}
+
+			f.parser.FireSingle(f.terminal, text, f.lineFeed.LineIn)
+			nulTimeout.Reset(100 * time.Millisecond)
+
+			if scanner.Err() != nil {
+				return scanner.Err()
+			}
+
+			scannerReset <- true
+
+		case <-nulTimeout.C:
+			f.parser.FireSingle(f.terminal, "\x00", f.lineFeed.LineIn)
 		}
 	}
 

@@ -76,7 +76,9 @@ func NextOutput[T string | []byte](p *TerminalDataParser, data T) TerminalData {
 			p.terminalData.Queue(ApcData{ansi.ApcSequence{Data: append([]byte{}, p.parser.Data()...)}})
 		} else {
 			for parsedIndex := 0; parsedIndex < len(p.parsedBytes); parsedIndex++ {
-				p.terminalData.Queue(ControlCodeData(p.parsedBytes[parsedIndex]))
+				if p.parsedBytes[parsedIndex] != 0 {
+					p.terminalData.Queue(ControlCodeData(p.parsedBytes[parsedIndex]))
+				}
 			}
 		}
 

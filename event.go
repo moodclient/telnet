@@ -10,15 +10,12 @@ const (
 	eventUnknown eventType = iota
 	eventError
 	eventPrinterOutput
-	eventOutboundCommand
-	eventOutboundText
+	eventOutboundData
 )
 
 type eventsTransport struct {
 	eventType eventType
 	err       error
-	command   Command
-	text      string
 	output    TerminalData
 }
 
@@ -38,10 +35,8 @@ func (p *terminalEventPump) processEvent(terminal *Terminal, event eventsTranspo
 		terminal.encounteredError(event.err)
 	case eventPrinterOutput:
 		terminal.encounteredPrinterOutput(event.output)
-	case eventOutboundText:
-		terminal.sentText(event.text)
-	case eventOutboundCommand:
-		terminal.sentCommand(event.command)
+	case eventOutboundData:
+		terminal.encounteredOutboundData(event.output)
 	default:
 		panic("invalid event")
 	}
@@ -82,16 +77,9 @@ func (p *terminalEventPump) EncounteredPrinterOutput(output TerminalData) {
 	}
 }
 
-func (p *terminalEventPump) SentCommand(command Command) {
+func (p *terminalEventPump) EncounteredOutboundData(output TerminalData) {
 	p.events <- eventsTransport{
-		eventType: eventOutboundCommand,
-		command:   command,
-	}
-}
-
-func (p *terminalEventPump) SentText(text string) {
-	p.events <- eventsTransport{
-		eventType: eventOutboundText,
-		text:      text,
+		eventType: eventOutboundData,
+		output:    output,
 	}
 }

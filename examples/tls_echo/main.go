@@ -86,7 +86,7 @@ func main() {
 	}
 
 	lineFeed := utils.NewLineFeed(terminal, func(t *telnet.Terminal, data telnet.TerminalData) {
-		t.Keyboard().WriteString(data.String())
+		t.Keyboard().LineOut(t, data)
 	}, printerOutput, utils.LineFeedConfig{})
 
 	feed, err := utils.NewKeyboardFeed(terminal, stdin, lineFeed)
