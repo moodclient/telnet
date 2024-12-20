@@ -87,9 +87,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	lineFeed := utils.NewLineFeed(terminal, func(t *telnet.Terminal, data telnet.TerminalData) {
-		t.Keyboard().LineOut(t, data)
-	}, printerOutput, utils.LineFeedConfig{})
+	lineFeed := utils.NewLineFeed(terminal, terminal.Keyboard().LineOut, printerOutput, utils.LineFeedConfig{})
 
 	feed, err := utils.NewKeyboardFeed(terminal, stdin, lineFeed)
 	if err != nil {

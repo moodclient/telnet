@@ -237,16 +237,6 @@ func (l *LineFeed) flush(newline bool) {
 }
 
 func (l *LineFeed) controlCodeIn(sequence telnet.ControlCodeData) {
-	if l.config.CharacterMode {
-		if sequence == '\r' {
-			l.insertData("\r\n", false)
-			return
-		}
-
-		l.insertData(sequence.String(), false)
-		return
-	}
-
 	switch sequence {
 	case '\r':
 		l.justPushedCR = true
@@ -267,11 +257,6 @@ func (l *LineFeed) controlCodeIn(sequence telnet.ControlCodeData) {
 }
 
 func (l *LineFeed) csiSequenceIn(sequence telnet.CsiData) {
-	if l.config.CharacterMode {
-		l.insertData(sequence.String(), false)
-		return
-	}
-
 	switch sequence.Cmd.Command() {
 	case 'C':
 		// Cursor forward
@@ -294,13 +279,20 @@ func (l *LineFeed) csiSequenceIn(sequence telnet.CsiData) {
 	l.insertData(sequence.String(), false)
 }
 
-func (l *LineFeed) LineInSelf(data telnet.TerminalData) {
-	l.LineIn(l.terminal, data)
-}
-
 func (l *LineFeed) LineIn(t *telnet.Terminal, data telnet.TerminalData) {
 	l.lineLock.Lock()
 	defer l.lineLock.Unlock()
+
+	if l.config.CharacterMode {
+		l.LineOut(t, data)
+
+		controlCode, isControlCode := data.(telnet.ControlCodeData)
+		if isControlCode && controlCode == ansi.CR {
+			l.LineOut(t, telnet.ControlCodeData(ansi.LF))
+		}
+
+		return
+	}
 
 	hadPushedCR := l.justPushedCR
 
@@ -317,10 +309,6 @@ func (l *LineFeed) LineIn(t *telnet.Terminal, data telnet.TerminalData) {
 
 	if hadPushedCR {
 		l.justPushedCR = false
-	}
-
-	if l.config.CharacterMode {
-		l.flush(false)
 	}
 }
 
