@@ -13,6 +13,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/term"
+	"github.com/moodclient/mudopts"
 	"github.com/moodclient/telnet"
 	"github.com/moodclient/telnet/telopts"
 	"github.com/moodclient/telnet/utils"
@@ -78,6 +79,8 @@ func main() {
 			telopts.RegisterNEWENVIRON(telnet.TelOptAllowLocal, telopts.NEWENVIRONConfig{
 				WellKnownVarKeys: telopts.NEWENVIRONWellKnownVars,
 			}),
+			mudopts.RegisterMCCP2(telnet.TelOptAllowRemote),
+			mudopts.RegisterMCCP3(telnet.TelOptAllowRemote),
 		},
 		EventHooks: telnet.EventHooks{
 			PrinterOutput:    []telnet.TerminalDataHandler{printerOutput},
