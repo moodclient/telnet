@@ -33,6 +33,9 @@ import (
 // As with Scanner, one should deal with the Output() return value, if any, before dealing with
 // the Err() return value.
 type TelnetScanner struct {
+	baseStream  io.Reader
+	inputStream io.Reader
+
 	scanner    *bufio.Scanner
 	scanResult chan bool
 
@@ -52,6 +55,8 @@ func NewTelnetScanner(charset *Charset, inputStream io.Reader) *TelnetScanner {
 	scan := bufio.NewScanner(inputStream)
 
 	scanner := &TelnetScanner{
+		baseStream:    inputStream,
+		inputStream:   inputStream,
 		scanner:       scan,
 		scanResult:    make(chan bool, 1),
 		charset:       charset,
@@ -172,37 +177,57 @@ func (s *TelnetScanner) Scan(ctx context.Context) bool {
 	}
 
 	var err error
-	for ctx.Err() == nil && s.cancellableScan(ctx) {
-		s.atEOF = false
-		s.err = s.scanner.Err()
 
-		bytes := s.scanner.Bytes()
-		if len(bytes) == 0 {
-			continue
-		}
+	for {
+		for ctx.Err() == nil && s.cancellableScan(ctx) {
+			s.atEOF = false
+			s.err = s.scanner.Err()
 
-		if len(bytes) > 1 && bytes[0] == IAC {
-			s.outCommand, err = parseCommand(bytes)
-
-			if err == nil {
-				s.bytesToDecode = s.bytesToDecode[:0]
-				s.pushCommand()
-				return true
+			bytes := s.scanner.Bytes()
+			if len(bytes) == 0 {
+				continue
 			}
 
-			s.pushError(err)
+			if len(bytes) > 1 && bytes[0] == IAC {
+				s.outCommand, err = parseCommand(bytes)
+
+				if err == nil {
+					s.bytesToDecode = s.bytesToDecode[:0]
+					s.pushCommand()
+					return true
+				}
+
+				s.pushError(err)
+			}
+
+			s.bytesToDecode = append(s.bytesToDecode, bytes...)
+			s.nextOutput = s.processDanglingBytes()
+
+			if s.nextOutput != nil || s.err != nil {
+				return true
+			}
 		}
 
-		s.bytesToDecode = append(s.bytesToDecode, bytes...)
-		s.nextOutput = s.processDanglingBytes()
-
-		if s.nextOutput != nil || s.err != nil {
+		// Clean out the rest of the dangling bytes before continuing
+		s.atEOF = true
+		s.err = s.scanner.Err()
+		if len(s.bytesToDecode) > 0 {
 			return true
 		}
+
+		// If we had a wrapped input stream, give the base steam a chance if
+		// the error is EOF
+		if !errors.Is(s.err, io.EOF) || s.inputStream == s.baseStream {
+			break
+		}
+
+		s.inputStream = s.baseStream
+		s.scanner = bufio.NewScanner(s.inputStream)
+		s.scanner.Split(s.ScanTelnet)
+		s.atEOF = false
+		s.err = nil
 	}
 
-	s.atEOF = true
-	s.err = s.scanner.Err()
 	return len(s.bytesToDecode) > 0
 }
 

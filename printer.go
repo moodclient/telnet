@@ -1,6 +1,7 @@
 package telnet
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"io"
@@ -102,4 +103,18 @@ func (p *TelnetPrinter) SetPromptCommand(flag PromptCommands) {
 // that indicate to the consumer where to place a prompt
 func (p *TelnetPrinter) ClearPromptCommand(flag PromptCommands) {
 	p.promptCommands.ClearPromptCommand(flag)
+}
+
+func (p *TelnetPrinter) WrapReader(wrap func(reader io.Reader) (io.Reader, error)) error {
+	wrapped, err := wrap(p.scanner.baseStream)
+	if err != nil {
+		return err
+	}
+
+	p.scanner.inputStream = wrapped
+	scan := bufio.NewScanner(wrapped)
+	scan.Split(p.scanner.ScanTelnet)
+	p.scanner.scanner = scan
+
+	return nil
 }

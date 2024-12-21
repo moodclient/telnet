@@ -18,6 +18,7 @@ type keyboardTransport struct {
 // to the remote peer.
 type TelnetKeyboard struct {
 	charset        *Charset
+	baseStream     io.Writer
 	outputStream   io.Writer
 	input          chan keyboardTransport
 	complete       chan bool
@@ -30,6 +31,7 @@ type TelnetKeyboard struct {
 func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEventPump) (*TelnetKeyboard, error) {
 	keyboard := &TelnetKeyboard{
 		charset:      charset,
+		baseStream:   output,
 		outputStream: output,
 		input:        make(chan keyboardTransport, 100),
 		complete:     make(chan bool, 1),
@@ -352,4 +354,14 @@ func (k *TelnetKeyboard) SendPromptHint() {
 	k.input <- keyboardTransport{
 		data: PromptData(0),
 	}
+}
+
+func (k *TelnetKeyboard) WrapWriter(wrap func(io.Writer) (io.Writer, error)) error {
+	wrapped, err := wrap(k.baseStream)
+	if err != nil {
+		return err
+	}
+
+	k.outputStream = wrapped
+	return nil
 }
