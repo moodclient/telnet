@@ -116,9 +116,11 @@ func (m *LINEMODE) writeModeCommand(mode LineModeFlags) {
 }
 
 func (m *LINEMODE) TransitionRemoteState(newState telnet.TelOptState) (func() error, error) {
-	// We need to send the MODE request immediately after the client confirms their
-	// state
-	m.writeModeCommand(m.Mode())
+	if newState == telnet.TelOptActive {
+		// We need to send the MODE request immediately after the client confirms their
+		// state
+		m.writeModeCommand(m.Mode())
+	}
 
 	return nil, nil
 }
