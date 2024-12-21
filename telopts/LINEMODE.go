@@ -122,7 +122,7 @@ func (m *LINEMODE) TransitionRemoteState(newState telnet.TelOptState) (func() er
 		m.writeModeCommand(m.Mode())
 	}
 
-	return nil, nil
+	return m.BaseTelOpt.TransitionRemoteState(newState)
 }
 
 func (m *LINEMODE) updateMode(mode LineModeFlags) {
