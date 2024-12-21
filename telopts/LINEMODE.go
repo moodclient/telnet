@@ -190,7 +190,7 @@ func (m *LINEMODE) subnegotiateMODE(subnegotiation []byte) error {
 
 func (m *LINEMODE) Subnegotiate(subnegotiation []byte) error {
 	if len(subnegotiation) == 0 {
-		return fmt.Errorf("linemode received empty subnegotiation")
+		return fmt.Errorf("linemode: received empty subnegotiation")
 	}
 
 	if subnegotiation[0] == linemodeSLC {
@@ -233,6 +233,46 @@ func (m *LINEMODE) Subnegotiate(subnegotiation []byte) error {
 	}
 
 	return m.BaseTelOpt.Subnegotiate(subnegotiation)
+}
+
+func (m *LINEMODE) SubnegotiationString(subnegotiation []byte) (string, error) {
+	if len(subnegotiation) == 0 {
+		return "", nil
+	}
+
+	var sb strings.Builder
+
+	if subnegotiation[0] == linemodeSLC {
+		sb.WriteString("SLC ")
+		sb.WriteString(fmt.Sprintf("%+v", subnegotiation[1:]))
+		return sb.String(), nil
+	}
+
+	if subnegotiation[0] == linemodeMODE {
+		sb.WriteString("MODE ")
+		if len(subnegotiation) > 1 {
+			sb.WriteString(LineModeFlags(subnegotiation[1]).String())
+		}
+		return sb.String(), nil
+	}
+
+	if subnegotiation[0] == telnet.DO {
+		sb.WriteString("DO ")
+	} else if subnegotiation[0] == telnet.WILL {
+		sb.WriteString("WILL ")
+	} else if subnegotiation[0] == telnet.DONT {
+		sb.WriteString("DONT ")
+	} else if subnegotiation[0] == telnet.WONT {
+		sb.WriteString("WONT ")
+	} else {
+		return m.BaseTelOpt.SubnegotiationString(subnegotiation)
+	}
+
+	if len(subnegotiation) > 1 && subnegotiation[1] == linemodeFORWARDMASK {
+		sb.WriteString("FORWARDMASK")
+	}
+
+	return sb.String(), nil
 }
 
 func (m *LINEMODE) Mode() LineModeFlags {
