@@ -81,6 +81,7 @@ func main() {
 			}),
 			mudopts.RegisterMCCP2(telnet.TelOptAllowRemote),
 			mudopts.RegisterMCCP3(telnet.TelOptAllowRemote),
+			mudopts.RegisterMSSP(telnet.TelOptAllowRemote, mudopts.MSSPData{}),
 		},
 		EventHooks: telnet.EventHooks{
 			PrinterOutput:    []telnet.TerminalDataHandler{printerOutput},

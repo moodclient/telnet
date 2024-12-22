@@ -8,6 +8,8 @@ github.com/charmbracelet/x/term v0.2.1 h1:AQeHeLZ1OqSXhrAWpYUtZyX1T3zVxfpZuEQMIQ
 github.com/charmbracelet/x/term v0.2.1/go.mod h1:oQ4enTYFV7QN4m0i9mzHrViD7TQKvNEEkHUMCmsxdUg=
 github.com/lucasb-eyer/go-colorful v1.2.0 h1:1nnpGOrhyZZuNyfu1QjKiUICQ74+3FNCN69Aj6K7nkY=
 github.com/lucasb-eyer/go-colorful v1.2.0/go.mod h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=
+github.com/moodclient/mudopts v0.0.0-20241222050500-e3d6d1634829 h1:9h6M/cLGMGaB4LOFlRcn7tFj8DMSHI0K+hb4U6rUSt4=
+github.com/moodclient/mudopts v0.0.0-20241222050500-e3d6d1634829/go.mod h1:RL+1kgSdsLmCe2DVNp5bUBtWwObASzpDpJrqlt7BwsM=
 github.com/moodclient/telnet v0.1.0 h1:hQuw1tPXkj0ZGNq38Lr7pbX57wWDWV2bpq7QGBLg+2c=
 github.com/moodclient/telnet v0.1.0/go.mod h1:CURBkMm//eEY+t6MQgjNpGIqIv9bfKWZyP462NRhGcw=
 github.com/muesli/cancelreader v0.2.2 h1:3I4Kt4BQjOR54NavqnDogx/MIoWBFa0StPA8ELUXHmA=
