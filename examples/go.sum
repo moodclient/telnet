@@ -12,6 +12,8 @@ github.com/moodclient/mudopts v0.0.0-20241222050500-e3d6d1634829 h1:9h6M/cLGMGaB
 github.com/moodclient/mudopts v0.0.0-20241222050500-e3d6d1634829/go.mod h1:RL+1kgSdsLmCe2DVNp5bUBtWwObASzpDpJrqlt7BwsM=
 github.com/moodclient/telnet v0.1.0 h1:hQuw1tPXkj0ZGNq38Lr7pbX57wWDWV2bpq7QGBLg+2c=
 github.com/moodclient/telnet v0.1.0/go.mod h1:CURBkMm//eEY+t6MQgjNpGIqIv9bfKWZyP462NRhGcw=
+github.com/moodclient/telnet v0.7.0 h1:EtFc+ljXKVFUQeIdOrRLNsdLaX6RPYrJM6tTiuoPvSQ=
+github.com/moodclient/telnet v0.7.0/go.mod h1:Ba+1/PSZ3/xiOr2XrGJUV8qieLRbKNq5a90pvUr1k3g=
 github.com/muesli/cancelreader v0.2.2 h1:3I4Kt4BQjOR54NavqnDogx/MIoWBFa0StPA8ELUXHmA=
 github.com/muesli/cancelreader v0.2.2/go.mod h1:3XuTXfFS2VjM+HTLZY9Ak0l6eUKfijIfMUZ4EgX0QYo=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
@@ -24,3 +26,5 @@ golang.org/x/sys v0.28.0 h1:Fksou7UEQUWlKvIdsqzJmUmCX3cZuD2+P3XyyzwMhlA=
 golang.org/x/sys v0.28.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
 golang.org/x/text v0.20.0 h1:gK/Kv2otX8gz+wn7Rmb3vT96ZwuoxnQlY+HlJVj7Qug=
 golang.org/x/text v0.20.0/go.mod h1:D4IsuqiFMhST5bX19pQ9ikHC2GsaKyk/oF+pn3ducp4=
+golang.org/x/text v0.21.0 h1:zyQAAkrwaneQ066sspRyJaG9VNi/YJ1NfzcGB3hZ/qo=
+golang.org/x/text v0.21.0/go.mod h1:4IBbMaMmOPCJ8SecivzSH54+73PCFmPWxNTLm+vZkEQ=

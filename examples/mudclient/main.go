@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/term"
 	"github.com/moodclient/mudopts"
@@ -46,6 +47,26 @@ func main() {
 	lipgloss.EnableLegacyWindowsANSI(os.Stdout)
 	lipgloss.EnableLegacyWindowsANSI(stdin)
 
+	colorProfile := colorprofile.Detect(os.Stdout, os.Environ())
+
+	clientInfo := mudopts.ClientInfo{
+		Name:    "Moodclient Example",
+		Version: "1.0",
+
+		Charset:  "UTF-8",
+		TermType: "XTERM",
+
+		Capabilities: mudopts.ANSI | mudopts.VT100 | mudopts.UTF8 |
+			mudopts.MouseTracking | mudopts.OscColorPalette | mudopts.MNES |
+			mudopts.SSL,
+	}
+
+	if colorProfile == colorprofile.ANSI256 {
+		clientInfo.Capabilities |= mudopts.Colors256
+	} else if colorProfile == colorprofile.TrueColor {
+		clientInfo.Capabilities |= mudopts.Colors256 | mudopts.TrueColor
+	}
+
 	state, err := term.MakeRaw(stdin.Fd())
 	if err != nil {
 		log.Fatalln(err)
@@ -69,16 +90,10 @@ func main() {
 			telopts.RegisterTRANSMITBINARY(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
 			telopts.RegisterEOR(telnet.TelOptAllowRemote | telnet.TelOptAllowLocal),
 			telopts.RegisterECHO(telnet.TelOptAllowRemote),
-			telopts.RegisterTTYPE(telnet.TelOptAllowLocal, []string{
-				"MOODCLIENT",
-				"XTERM-256COLOR",
-				"MTTS 299",
-			}),
 			telopts.RegisterSUPPRESSGOAHEAD(telnet.TelOptAllowLocal | telnet.TelOptAllowRemote),
 			telopts.RegisterNAWS(telnet.TelOptAllowLocal),
-			telopts.RegisterNEWENVIRON(telnet.TelOptAllowLocal, telopts.NEWENVIRONConfig{
-				WellKnownVarKeys: telopts.NEWENVIRONWellKnownVars,
-			}),
+			clientInfo.RegisterMNES(telnet.TelOptAllowLocal),
+			clientInfo.RegisterMTTS(telnet.TelOptAllowLocal),
 			mudopts.RegisterMCCP2(telnet.TelOptAllowRemote),
 			mudopts.RegisterMCCP3(telnet.TelOptAllowRemote),
 			mudopts.RegisterMSSP(telnet.TelOptAllowRemote, mudopts.MSSPData{}),
