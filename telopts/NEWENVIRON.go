@@ -128,7 +128,7 @@ func (o *NEWENVIRON) encodeText(buffer *bytes.Buffer, text string) {
 }
 
 func (o *NEWENVIRON) decodeText(buffer []byte) (int, string) {
-	textBytes := bytes.NewBuffer(nil)
+	var sb strings.Builder
 
 	var bufferIndex int
 	for bufferIndex = 0; bufferIndex < len(buffer); bufferIndex++ {
@@ -142,10 +142,10 @@ func (o *NEWENVIRON) decodeText(buffer []byte) (int, string) {
 			break
 		}
 
-		textBytes.WriteByte(buffer[bufferIndex])
+		sb.WriteByte(buffer[bufferIndex])
 	}
 
-	return bufferIndex, textBytes.String()
+	return bufferIndex, sb.String()
 }
 
 func (o *NEWENVIRON) writeSendAll() {
