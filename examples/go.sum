@@ -10,6 +10,8 @@ github.com/lucasb-eyer/go-colorful v1.2.0 h1:1nnpGOrhyZZuNyfu1QjKiUICQ74+3FNCN69
 github.com/lucasb-eyer/go-colorful v1.2.0/go.mod h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=
 github.com/moodclient/mudopts v0.0.0-20241222050500-e3d6d1634829 h1:9h6M/cLGMGaB4LOFlRcn7tFj8DMSHI0K+hb4U6rUSt4=
 github.com/moodclient/mudopts v0.0.0-20241222050500-e3d6d1634829/go.mod h1:RL+1kgSdsLmCe2DVNp5bUBtWwObASzpDpJrqlt7BwsM=
+github.com/moodclient/mudopts v0.0.0-20241227002759-feb9465029f6 h1:sJWvor6IANUvzPiZNa1OQCNosOmKdU3DP1a/PNV04I8=
+github.com/moodclient/mudopts v0.0.0-20241227002759-feb9465029f6/go.mod h1:RL+1kgSdsLmCe2DVNp5bUBtWwObASzpDpJrqlt7BwsM=
 github.com/moodclient/telnet v0.1.0 h1:hQuw1tPXkj0ZGNq38Lr7pbX57wWDWV2bpq7QGBLg+2c=
 github.com/moodclient/telnet v0.1.0/go.mod h1:CURBkMm//eEY+t6MQgjNpGIqIv9bfKWZyP462NRhGcw=
 github.com/moodclient/telnet v0.7.0 h1:EtFc+ljXKVFUQeIdOrRLNsdLaX6RPYrJM6tTiuoPvSQ=
