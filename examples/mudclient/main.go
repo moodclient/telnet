@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/term"
 	"github.com/moodclient/mudopts"
+	"github.com/moodclient/mudopts/gmcp"
 	"github.com/moodclient/telnet"
 	"github.com/moodclient/telnet/telopts"
 	"github.com/moodclient/telnet/utils"
@@ -97,6 +98,13 @@ func main() {
 			mudopts.RegisterMCCP2(telnet.TelOptAllowRemote),
 			mudopts.RegisterMCCP3(telnet.TelOptAllowRemote),
 			mudopts.RegisterMSSP(telnet.TelOptAllowRemote, mudopts.MSSPData{}),
+			gmcp.RegisterGMCP(telnet.TelOptAllowRemote, clientInfo,
+				gmcp.NewPackageChar(), gmcp.NewPackageCharAfflictions(),
+				gmcp.NewPackageCharDefences(), gmcp.NewPackageCharItems(),
+				gmcp.NewPackageCharSkills(), gmcp.NewPackageClient(),
+				gmcp.NewPackageCommChannel(), gmcp.NewPackageCore(),
+				gmcp.NewPackageRoom(),
+			),
 		},
 		EventHooks: telnet.EventHooks{
 			PrinterOutput:    []telnet.TerminalDataHandler{printerOutput},
@@ -147,10 +155,11 @@ func main() {
 	}()
 
 	err = terminal.WaitForExit()
-	if err != nil {
-		log.Fatalln(err)
-	}
 
 	fmt.Println("\x1b[0m")
 	fmt.Println(logStore.String())
+
+	if err != nil {
+		log.Fatalln(err)
+	}
 }
