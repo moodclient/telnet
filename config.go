@@ -91,7 +91,11 @@ type TerminalConfig struct {
 	// Terminal.Register* methods.
 	EventHooks EventHooks
 
-	// Middlewares is a set of middlewares that should process output from the printer
+	// PrinterMiddlewares is a set of middlewares that should process output from the printer
 	// before it is sent to registered hooks
-	Middlewares []Middleware
+	PrinterMiddlewares []Middleware
+
+	// KeyboardMiddlewares is a set of middlewares that should process data sent
+	// to the keyboard before it is sent to the network connection
+	KeyboardMiddlewares []Middleware
 }

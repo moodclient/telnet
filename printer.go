@@ -16,6 +16,7 @@ type TelnetPrinter struct {
 	complete       chan error
 	eventPump      *terminalEventPump
 	promptCommands atomicPromptCommands
+	middlewares    *MiddlewareStack
 }
 
 func newTelnetPrinter(charset *Charset, inputStream io.Reader, eventPump *terminalEventPump) *TelnetPrinter {
@@ -117,4 +118,8 @@ func (p *TelnetPrinter) WrapReader(wrap func(reader io.Reader) (io.Reader, error
 	p.scanner.scanner = scan
 
 	return nil
+}
+
+func (p *TelnetPrinter) Middlewares() *MiddlewareStack {
+	return p.middlewares
 }

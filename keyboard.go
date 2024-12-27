@@ -17,6 +17,7 @@ type keyboardTransport struct {
 // TelnetKeyboard is a Terminal subsidiary that is in charge of sending outbound data
 // to the remote peer.
 type TelnetKeyboard struct {
+	terminal       *Terminal
 	charset        *Charset
 	baseStream     io.Writer
 	outputStream   io.Writer
@@ -25,10 +26,10 @@ type TelnetKeyboard struct {
 	eventPump      *terminalEventPump
 	lock           *keyboardLock
 	promptCommands atomicPromptCommands
-	parser         *TerminalDataParser
+	decoder        *keyboardDecoder
 }
 
-func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEventPump) (*TelnetKeyboard, error) {
+func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEventPump, middlewares ...Middleware) (*TelnetKeyboard, error) {
 	keyboard := &TelnetKeyboard{
 		charset:      charset,
 		baseStream:   output,
@@ -37,7 +38,7 @@ func newTelnetKeyboard(charset *Charset, output io.Writer, eventPump *terminalEv
 		complete:     make(chan bool, 1),
 		eventPump:    eventPump,
 		lock:         newKeyboardLock(),
-		parser:       NewTerminalDataParser(),
+		decoder:      newKeyboardDecoder(middlewares...),
 	}
 	keyboard.promptCommands.Init()
 
@@ -129,7 +130,14 @@ func (k *TelnetKeyboard) write(transport keyboardTransport) bool {
 	var err error
 
 	if transport.data != nil {
-		switch d := transport.data.(type) {
+		k.decoder.Decode(k.terminal, transport.data)
+	} else if transport.unparsedString != "" {
+		k.decoder.DecodeString(k.terminal, transport.unparsedString)
+	}
+
+	decoded := k.decoder.Decoded()
+	for _, data := range decoded {
+		switch d := data.(type) {
 		case CommandData:
 			err = k.writeCommand(d.Command)
 		case PromptData:
@@ -146,49 +154,20 @@ func (k *TelnetKeyboard) write(transport keyboardTransport) bool {
 					OpCode: GA,
 				})
 			} else {
-				// We tried to send a prompt hint, but all prompt commands
-				// were suppressed
-				return true
+				continue
 			}
 		default:
 			err = k.writeText(d)
 		}
 
-		k.eventPump.EncounteredOutboundData(transport.data)
-	} else if transport.unparsedString != "" {
-		data := NextOutput(k.parser, transport.unparsedString)
-		for data != nil {
-			err = k.writeText(data)
-			if !k.handleError(err) {
-				break
-			}
-
-			k.eventPump.EncounteredOutboundData(data)
-			data = NextOutput(k.parser, "")
+		if err != nil {
+			return k.handleError(err)
 		}
 
-		finalText := k.parser.Flush()
-		if finalText != nil {
-			err = k.writeText(finalText)
-			if k.handleError(err) {
-				k.eventPump.EncounteredOutboundData(finalText)
-			}
-		}
-
-		// Force any remaining bytes out since this was a self-contained line of text
-		data = NextOutput(k.parser, []byte{0})
-		for data != nil {
-			err = k.writeText(data)
-			if !k.handleError(err) {
-				break
-			}
-
-			k.eventPump.EncounteredOutboundData(data)
-			data = NextOutput(k.parser, "")
-		}
+		k.eventPump.EncounteredOutboundData(data)
 	}
 
-	if err == nil && transport.postSend != nil {
+	if transport.postSend != nil {
 		err = transport.postSend()
 	}
 
