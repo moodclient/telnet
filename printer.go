@@ -79,9 +79,9 @@ func (p *TelnetPrinter) printerLoop(ctx context.Context, terminal *Terminal) {
 		p.complete <- ctx.Err()
 	} else if p.scanner.Err() != nil && !errors.Is(p.scanner.Err(), net.ErrClosed) {
 		p.complete <- p.scanner.Err()
+	} else {
+		p.complete <- nil
 	}
-
-	p.complete <- nil
 }
 
 // waitForExit will block until the printer is disposed of
