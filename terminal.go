@@ -54,6 +54,7 @@ type Terminal struct {
 	eventPump          *terminalEventPump
 	options            map[TelOptCode]TelnetOption
 	outboundDataParser *TerminalDataParser
+	middlewareStack    *MiddlewareStack
 
 	printerOutputHooks    *EventPublisher[TerminalData]
 	outboundDataHooks     *EventPublisher[TerminalData]
@@ -108,6 +109,13 @@ func NewTerminalFromPipes(ctx context.Context, reader io.Reader, writer io.Write
 		encounteredErrorHooks: NewPublisher(config.EventHooks.EncounteredError),
 		telOptEventHooks:      NewPublisher(config.EventHooks.TelOptEvent),
 	}
+
+	printerLineOut := func(t *Terminal, data TerminalData) {
+		terminal.printerOutputHooks.Fire(t, data)
+	}
+
+	terminal.middlewareStack = NewMiddlewareStack(printerLineOut, config.Middlewares...)
+
 	terminal.outboundDataParser = NewTerminalDataParser()
 	err = terminal.initTelopts(config.TelOpts)
 	if err != nil {
@@ -173,12 +181,16 @@ func (t *Terminal) Printer() *TelnetPrinter {
 	return t.printer
 }
 
+func (t *Terminal) Middlewares() *MiddlewareStack {
+	return t.middlewareStack
+}
+
 func (t *Terminal) encounteredError(err error) {
 	t.encounteredErrorHooks.Fire(t, err)
 }
 
 func (t *Terminal) encounteredPrinterOutput(output TerminalData) {
-	t.printerOutputHooks.Fire(t, output)
+	t.middlewareStack.LineIn(t, output)
 }
 
 func (t *Terminal) encounteredOutboundData(output TerminalData) {

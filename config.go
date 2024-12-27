@@ -90,4 +90,8 @@ type TerminalConfig struct {
 	// event occurs.  You can register additional callbacks after creation with
 	// Terminal.Register* methods.
 	EventHooks EventHooks
+
+	// Middlewares is a set of middlewares that should process output from the printer
+	// before it is sent to registered hooks
+	Middlewares []Middleware
 }
